@@ -1,0 +1,234 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String       @id @default(uuid())
+  email           String       @unique
+  password        String
+  name            String?
+  role            Role         @default(CLIENT)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  profile         Profile?
+  settings        Settings?
+  jobPosts        JobPost[]
+  reviewsAuthored Review[]     @relation("ReviewAuthor")
+  promotedAds     PromotedAd[]
+  chatsAsUser1    Chat[]       @relation("ChatUser1")
+  chatsAsUser2    Chat[]       @relation("ChatUser2")
+  messagesSent    Message[]    @relation("MessageSender")
+  offersSent      JobOffer[]   @relation("OfferSender")
+  offersReceived  JobOffer[]   @relation("OfferReceiver")
+}
+
+model Profile {
+  id                  String               @id @default(uuid())
+  bio                 String?
+  photoUrl            String?
+  portfolioImages     String[]
+  phone               String?
+  address             String?
+  department          String?
+  municipality        String?
+  lat                 Float?
+  lng                 Float?
+  rating              Float                @default(0)
+  jobsCompleted       Int                  @default(0)
+  hours               Int                  @default(0)
+  canTravel           Boolean              @default(false)
+  hasVehicle          Boolean              @default(false)
+  travelDetails       String?
+  userId              String               @unique
+  user                User                 @relation(fields: [userId], references: [id])
+  reviewsReceived     Review[]             @relation("ReviewRecipient")
+  profileObservations ProfileObservation[]
+  category            Category?            @relation(fields: [categoryId], references: [id])
+  categoryId          String?
+  promotedAds         PromotedAd[]
+
+  @@index([categoryId])
+  @@index([department, municipality])
+  @@index([rating(sort: Desc)])
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  icon        String?
+  jobPosts    JobPost[]
+  profiles    Profile[]
+}
+
+model JobPost {
+  id          String       @id @default(uuid())
+  title       String
+  description String
+  photos       String[]
+  budget       Float?
+  location     String?
+  department   String?
+  municipality String?
+  lat          Float?
+  lng          Float?
+  status      JobStatus    @default(OPEN)
+  authorId    String
+  author      User         @relation(fields: [authorId], references: [id])
+  categoryId  String?
+  category    Category?    @relation(fields: [categoryId], references: [id])
+  promotedAds PromotedAd[]
+  offers      JobOffer[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([status])
+  @@index([categoryId])
+  @@index([createdAt(sort: Desc)])
+  @@index([authorId])
+}
+
+model JobOffer {
+  id               String      @id @default(uuid())
+  jobPostId        String
+  jobPost          JobPost     @relation(fields: [jobPostId], references: [id])
+  senderId         String
+  sender           User        @relation("OfferSender", fields: [senderId], references: [id])
+  receiverId       String
+  receiver         User        @relation("OfferReceiver", fields: [receiverId], references: [id])
+  description      String
+  price            Float
+  estimatedDays    Int?
+  status            OfferStatus @default(PENDING)
+  senderApproved    Boolean     @default(false)
+  receiverApproved  Boolean     @default(false)
+  senderCompleted   Boolean     @default(false)
+  receiverCompleted Boolean     @default(false)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  reviews           Review[]
+
+  @@index([jobPostId])
+  @@index([senderId])
+  @@index([receiverId])
+}
+
+model Review {
+  id        String    @id @default(uuid())
+  content   String?
+  rating    Float
+  authorId  String
+  author    User      @relation("ReviewAuthor", fields: [authorId], references: [id])
+  profileId String
+  profile   Profile   @relation("ReviewRecipient", fields: [profileId], references: [id])
+  offerId   String?
+  offer     JobOffer? @relation(fields: [offerId], references: [id])
+  createdAt DateTime  @default(now())
+
+  @@index([profileId])
+  @@index([offerId])
+}
+
+model ProfileObservation {
+  id        String   @id @default(uuid())
+  content   String
+  profileId String
+  profile   Profile  @relation(fields: [profileId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Settings {
+  id                   String  @id @default(uuid())
+  notificationsEnabled Boolean @default(true)
+  emailNotifications   Boolean @default(true)
+  darkMode             Boolean @default(false)
+  language             String  @default("es")
+  userId               String  @unique
+  user                 User    @relation(fields: [userId], references: [id])
+}
+
+model Chat {
+  user1Id       String
+  user2Id       String
+  user1         User      @relation("ChatUser1", fields: [user1Id], references: [id])
+  user2         User      @relation("ChatUser2", fields: [user2Id], references: [id])
+  messages      Message[]
+  user1LastRead DateTime?
+  user2LastRead DateTime?
+
+  @@id([user1Id, user2Id])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  content   String
+  imageUrl  String?
+  senderId  String
+  sender    User     @relation("MessageSender", fields: [senderId], references: [id])
+  user1Id   String
+  user2Id   String
+  chat      Chat     @relation(fields: [user1Id, user2Id], references: [user1Id, user2Id])
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model Advertisement {
+  id        String   @id @default(uuid())
+  title     String
+  images    String[]
+  targetUrl String?
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean  @default(true)
+}
+
+model PromotedAd {
+  id        String          @id @default(uuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id])
+  jobPostId String?
+  jobPost   JobPost?        @relation(fields: [jobPostId], references: [id])
+  profileId String?
+  profile   Profile?        @relation(fields: [profileId], references: [id])
+  images    String[]
+  startDate DateTime
+  endDate   DateTime
+  status    PromotionStatus @default(PENDING)
+}
+
+enum Role {
+  CLIENT
+  PROVIDER
+  ADMIN
+}
+
+enum JobStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+}
+
+enum PromotionStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  COMPLETED
+}
