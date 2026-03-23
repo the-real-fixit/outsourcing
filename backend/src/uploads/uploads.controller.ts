@@ -1,22 +1,32 @@
 import { Controller, Post, UseInterceptors, UploadedFiles, UseGuards, BadRequestException } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
+
+// Configure Cloudinary synchronously (since environment variables should be available at startup)
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: async (req, file) => {
+    return {
+      folder: 'fixit_uploads',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'bmp', 'heic', 'pdf', 'doc', 'docx'],
+    };
+  },
+});
 
 @Controller('upload')
 export class UploadsController {
     @UseGuards(AuthGuard('jwt'))
     @Post()
     @UseInterceptors(FilesInterceptor('files', 10, {
-        storage: diskStorage({
-            destination: './uploads',
-            filename: (req, file, callback) => {
-                const uniqueSuffix = uuidv4() + extname(file.originalname);
-                callback(null, uniqueSuffix);
-            }
-        }),
+        storage: storage,
         fileFilter: (req, file, callback) => {
             if (!file.originalname.match(/\.(jpg|jpeg|png|webp|gif|svg|bmp|heic|pdf|doc|docx)$/i)) {
                 return callback(new BadRequestException('Invalid file format!'), false);
@@ -31,8 +41,10 @@ export class UploadsController {
         if (!files || files.length === 0) {
             throw new BadRequestException('No files uploaded or invalid file format');
         }
-        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-        const urls = files.map(file => `${baseUrl}/uploads/${file.filename}`);
+        
+        // Cloudinary provides the secure URL in the 'path' property
+        const urls = files.map(file => file.path);
+        
         return { urls };
     }
 }
