@@ -9,10 +9,22 @@ async function bootstrap() {
   // Security Headers
   app.use(helmet());
 
-  // Strict CORS
+  // Flexible CORS
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    origin: (origin, callback) => {
+      const allowedOrigins = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(',') : [];
+      if (
+        !origin || // Allow non-browser requests (like Postman)
+        origin.startsWith('http://localhost') || // Allow local development
+        origin.endsWith('.netlify.app') || // Allow all Netlify deployments (including previews)
+        allowedOrigins.includes(origin) // Allow specific origins from ENV
+      ) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
 
