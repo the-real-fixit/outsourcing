@@ -1,4 +1,5 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, MinLength, IsEnum } from 'class-validator';
+import { Role } from '@prisma/client';
 
 export class LoginDto {
     @IsEmail({}, { message: 'El correo debe ser válido' })
@@ -24,7 +25,7 @@ export class RegisterDto {
     @IsNotEmpty({ message: 'El nombre es requerido' })
     name: string;
 
-    @IsString()
+    @IsEnum(Role, { message: 'El rol debe ser válido' })
     @IsNotEmpty({ message: 'El rol es requerido' })
-    role: string;
+    role: Role;
 }
