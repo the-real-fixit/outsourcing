@@ -123,10 +123,10 @@ const EmployerDashboard = () => {
                 <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-start sm:items-center">
                     <div>
                         <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-1">
-                            Empleador
+                            Bienvenido {user?.name || 'Usuario'}
                         </h1>
                         <p className="text-gray-500 font-medium">
-                            Hola {user?.name || 'Usuario'}, aquí puedes buscar y gestionar tus proyectos.
+                            Aquí puedes buscar y gestionar tus proyectos.
                         </p>
                     </div>
                     <Link
@@ -210,7 +210,7 @@ const EmployerDashboard = () => {
                                     className={`cursor-pointer ${viewMode === 'list'
                                         ? 'block p-6 hover:bg-gray-50 transition-colors'
                                         : 'bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-100 overflow-hidden flex flex-col'
-                                    }`}
+                                        }`}
                                 >
                                     <div className={viewMode === 'list' ? "flex flex-col md:flex-row md:items-start gap-4" : "flex flex-col h-full"}>
 
@@ -264,8 +264,8 @@ const EmployerDashboard = () => {
                                                     {(post.municipality || post.department || post.location) && (
                                                         <span className="flex items-center">
                                                             <MapPin size={12} className="text-red-500 mr-1" />
-                                                            {post.municipality && post.department 
-                                                                ? `${post.municipality}, ${post.department}` 
+                                                            {post.municipality && post.department
+                                                                ? `${post.municipality}, ${post.department}`
                                                                 : post.location}
                                                         </span>
                                                     )}
