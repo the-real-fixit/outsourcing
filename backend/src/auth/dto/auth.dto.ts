@@ -24,5 +24,7 @@ export class RegisterDto {
     @IsNotEmpty({ message: 'El nombre es requerido' })
     name: string;
 
-    // We can add role later if it's sent from the frontend, but typically it assumes a default (CLIENT)
+    @IsString()
+    @IsNotEmpty({ message: 'El rol es requerido' })
+    role: string;
 }
