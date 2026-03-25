@@ -57,6 +57,22 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
+## Stress Testing
+
+We use [Artillery](https://www.artillery.io/) for load and stress testing. The configuration and scenarios are located in the `test/load/` directory.
+
+To run the load tests locally (recommended):
+```bash
+$ npm run test:load:local
+```
+
+To run the load tests against the production server (WARNING: may cause downtime or spike database usage):
+```bash
+$ npm run test:load
+```
+
+For more details, please see [test/load/README.md](./test/load/README.md).
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
