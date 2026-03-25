@@ -2,16 +2,45 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, JobStatus, OfferStatus, Role } from '@prisma/client';
 
+import { IsString, IsNotEmpty, IsOptional, IsNumber, IsArray, IsNumberString } from 'class-validator';
+
 export class CreateJobPostDto {
+    @IsString()
+    @IsNotEmpty()
     title: string;
+
+    @IsString()
+    @IsNotEmpty()
     description: string;
+
+    @IsOptional()
     budget?: string | number;
+
+    @IsString()
+    @IsOptional()
     location: string;
+
+    @IsString()
+    @IsOptional()
     department?: string;
+
+    @IsString()
+    @IsOptional()
     municipality?: string;
+
+    @IsOptional()
     lat?: string | number;
+
+    @IsOptional()
     lng?: string | number;
+
+    @IsString()
+    @IsOptional()
     categoryId?: string;
+
+    @IsArray()
+    @IsString({ each: true })
+    @IsOptional()
     photos?: string[];
 }
 
