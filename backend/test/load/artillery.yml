@@ -1,0 +1,31 @@
+config:
+  target: "https://fix-it-zcgs.onrender.com"
+  phases:
+    - duration: 60
+      arrivalRate: 5
+      name: Warm up
+    - duration: 120
+      arrivalRate: 30
+      name: Sustained load
+  environments:
+    production:
+      target: "https://fix-it-zcgs.onrender.com"
+    local:
+      target: "http://localhost:3000"
+      phases:
+        - duration: 30
+          arrivalRate: 5
+          name: Local test
+
+scenarios:
+  - name: "Buscar categorías y anuncios (Read-Heavy)"
+    flow:
+      - get:
+          url: "/api/categories"
+      - think: 2 # simula a un usuario leyendo las categorías
+      - get:
+          url: "/api/job-posts"
+      - think: 3
+      # Simulamos un error o endpoint que a veces falla
+      - get:
+          url: "/api/job-posts?search=electricista"
