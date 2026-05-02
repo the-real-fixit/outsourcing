@@ -22,7 +22,7 @@ import { APP_GUARD } from '@nestjs/core';
     }),
     ThrottlerModule.forRoot([{
       ttl: 60000,
-      limit: 100, // max 100 requests per minute per IP
+      limit: 85, // max 85 requests per minute per IP
     }]),
     PrismaModule,
     UsersModule,
