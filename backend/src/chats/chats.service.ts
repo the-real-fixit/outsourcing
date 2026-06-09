@@ -29,25 +29,39 @@ export class ChatsService {
             }
         });
 
-        // Compute unread count per chat
-        return Promise.all(chats.map(async (chat) => {
-            const isUser1 = chat.user1Id === userId;
-            const myLastRead = isUser1 ? chat.user1LastRead : chat.user2LastRead;
+        if (chats.length === 0) return [];
 
-            const unreadCount = await this.prisma.message.count({
-                where: {
-                    user1Id: chat.user1Id,
-                    user2Id: chat.user2Id,
-                    senderId: { not: userId },
-                    ...(myLastRead ? { createdAt: { gt: myLastRead } } : {})
-                }
-            });
+        // Compute unread count per chat in a single grouped query
+        const unreadCounts = await this.prisma.message.groupBy({
+            by: ['user1Id', 'user2Id'],
+            _count: { _all: true },
+            where: {
+                senderId: { not: userId },
+                OR: chats.map(chat => {
+                    const isUser1 = chat.user1Id === userId;
+                    const myLastRead = isUser1 ? chat.user1LastRead : chat.user2LastRead;
+                    return {
+                        user1Id: chat.user1Id,
+                        user2Id: chat.user2Id,
+                        ...(myLastRead ? { createdAt: { gt: myLastRead } } : {})
+                    };
+                })
+            }
+        });
 
+        const countMap = new Map<string, number>();
+        unreadCounts.forEach(c => {
+            countMap.set(`${c.user1Id}_${c.user2Id}`, c._count._all);
+        });
+
+        return chats.map(chat => {
+            const key = `${chat.user1Id}_${chat.user2Id}`;
+            const unreadCount = countMap.get(key) || 0;
             return { ...chat, unreadCount };
-        }));
+        });
     }
 
-    async getChatAndMessages(currentUserId: string, peerId: string) {
+    async getChatAndMessages(currentUserId: string, peerId: string, limit = 50, cursorId?: string) {
         const { user1Id, user2Id } = this.getChatIds(currentUserId, peerId);
 
         let chat = await this.prisma.chat.findUnique({
@@ -62,10 +76,19 @@ export class ChatsService {
             });
         }
 
-        return this.prisma.message.findMany({
+        const queryOptions: any = {
             where: { user1Id, user2Id },
-            orderBy: { createdAt: 'asc' }
-        });
+            orderBy: { createdAt: 'desc' },
+            take: limit
+        };
+
+        if (cursorId) {
+            queryOptions.cursor = { id: cursorId };
+            queryOptions.skip = 1;
+        }
+
+        const messages = await this.prisma.message.findMany(queryOptions);
+        return messages.reverse();
     }
 
     async markRead(userId: string, peerId: string) {

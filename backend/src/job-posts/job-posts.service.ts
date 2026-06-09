@@ -72,76 +72,96 @@ export class JobPostsService {
         });
     }
 
-    async findAll(categoryId?: string, status?: string, authorRole?: string, authorId?: string, lat?: string, lng?: string, department?: string, municipality?: string, search?: string) {
-        const where: Prisma.JobPostWhereInput = {};
+    async findAll(
+        categoryId?: string,
+        status?: string,
+        authorRole?: string,
+        authorId?: string,
+        lat?: string,
+        lng?: string,
+        department?: string,
+        municipality?: string,
+        search?: string,
+        page = 1,
+        limit = 20
+    ) {
+        const skip = (page - 1) * limit;
+        const conditions: Prisma.Sql[] = [];
 
-        if (categoryId) where.categoryId = categoryId;
-        if (status) where.status = status as JobStatus;
-        if (authorId) where.authorId = authorId;
+        if (categoryId) {
+            conditions.push(Prisma.sql`jp."categoryId" = ${categoryId}`);
+        }
+        if (status) {
+            conditions.push(Prisma.sql`jp."status" = ${status}::"JobStatus"`);
+        }
+        if (authorId) {
+            conditions.push(Prisma.sql`jp."authorId" = ${authorId}`);
+        }
         if (authorRole) {
-            where.author = {
-                role: authorRole as Role
-            };
+            conditions.push(Prisma.sql`u."role" = ${authorRole}::"Role"`);
         }
         if (search) {
-            where.OR = [
-                { title: { contains: search, mode: 'insensitive' } },
-                { description: { contains: search, mode: 'insensitive' } },
-            ];
+            const searchPattern = `%${search}%`;
+            conditions.push(Prisma.sql`(jp."title" ILIKE ${searchPattern} OR jp."description" ILIKE ${searchPattern})`);
         }
 
-        const posts = await this.prisma.jobPost.findMany({
-            where,
-            include: {
-                author: { select: { id: true, name: true, role: true, profile: { select: { photoUrl: true } } } },
-                category: true
-            },
-            orderBy: { createdAt: 'desc' }
-        });
+        const whereClause = conditions.length > 0
+            ? Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}`
+            : Prisma.empty;
 
-        // Parse coordinates
+        // Sorting clause
+        let orderByClause = Prisma.sql`ORDER BY jp."createdAt" DESC`;
+
         const userLat = lat ? parseFloat(lat) : null;
         const userLng = lng ? parseFloat(lng) : null;
 
         if (userLat !== null && userLng !== null && !isNaN(userLat) && !isNaN(userLng)) {
-            // Sort by Haversine distance
-            const haversine = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-                const R = 6371; // Earth radius in km
-                const dLat = (lat2 - lat1) * Math.PI / 180;
-                const dLon = (lon2 - lon1) * Math.PI / 180;
-                const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-                return R * c;
-            };
-
-            return posts.sort((a, b) => {
-                if (a.lat !== null && a.lng !== null && b.lat !== null && b.lng !== null) {
-                    const distA = haversine(userLat, userLng, a.lat, a.lng);
-                    const distB = haversine(userLat, userLng, b.lat, b.lng);
-                    return distA - distB;
-                }
-                if (a.lat !== null && a.lng !== null) return -1;
-                if (b.lat !== null && b.lng !== null) return 1;
-                return 0;
-            });
+            orderByClause = Prisma.sql`
+                ORDER BY 
+                    CASE 
+                        WHEN jp."lat" IS NOT NULL AND jp."lng" IS NOT NULL THEN
+                            6371 * acos(
+                                LEAST(1.0, GREATEST(-1.0, 
+                                    cos(radians(${userLat})) * cos(radians(jp."lat")) * cos(radians(jp."lng") - radians(${userLng})) + 
+                                    sin(radians(${userLat})) * sin(radians(jp."lat"))
+                                ))
+                            )
+                        ELSE NULL
+                    END ASC NULLS LAST
+            `;
+        } else if (department || municipality) {
+            orderByClause = Prisma.sql`
+                ORDER BY 
+                    (CASE WHEN jp."municipality" = ${municipality || ''} THEN 2 ELSE 0 END) + 
+                    (CASE WHEN jp."department" = ${department || ''} THEN 1 ELSE 0 END) DESC,
+                    jp."createdAt" DESC
+            `;
         }
 
-        if (department || municipality) {
-            // Sort by exact match score
-            return posts.sort((a, b) => {
-                let scoreA = 0;
-                let scoreB = 0;
-                if (a.municipality === municipality) scoreA += 2;
-                if (a.department === department) scoreA += 1;
-                if (b.municipality === municipality) scoreB += 2;
-                if (b.department === department) scoreB += 1;
-                return scoreB - scoreA;
-            });
-        }
+        const query = Prisma.sql`
+            SELECT jp.id
+            FROM "JobPost" jp
+            LEFT JOIN "User" u ON jp."authorId" = u.id
+            ${whereClause}
+            ${orderByClause}
+            LIMIT ${limit} OFFSET ${skip}
+        `;
 
-        return posts;
+        const resultIds = await this.prisma.$queryRaw<{ id: string }[]>(query);
+        const ids = resultIds.map(row => row.id);
+
+        if (ids.length === 0) return [];
+
+        const posts = await this.prisma.jobPost.findMany({
+            where: { id: { in: ids } },
+            include: {
+                author: { select: { id: true, name: true, role: true, profile: { select: { photoUrl: true } } } },
+                category: true
+            }
+        });
+
+        const idToIndex = new Map(ids.map((id, index) => [id, index]));
+        return posts.sort((a, b) => (idToIndex.get(a.id) ?? 0) - (idToIndex.get(b.id) ?? 0));
     }
 
     async findOne(id: string) {
@@ -220,11 +240,12 @@ export class JobPostsService {
             }
         });
 
-        // Recalculate average rating
-        const allReviews = await this.prisma.review.findMany({
+        // Recalculate average rating using db aggregation
+        const aggregate = await this.prisma.review.aggregate({
+            _avg: { rating: true },
             where: { profileId: profile.id }
         });
-        const avgRating = allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length;
+        const avgRating = aggregate._avg.rating || 0;
 
         await this.prisma.profile.update({
             where: { id: profile.id },
@@ -513,9 +534,12 @@ export class JobPostsService {
             }
         });
 
-        // Recalculate average rating
-        const allReviews = await this.prisma.review.findMany({ where: { profileId: profile.id } });
-        const avgRating = allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length;
+        // Recalculate average rating using db aggregation
+        const aggregate = await this.prisma.review.aggregate({
+            _avg: { rating: true },
+            where: { profileId: profile.id }
+        });
+        const avgRating = aggregate._avg.rating || 0;
         await this.prisma.profile.update({
             where: { id: profile.id },
             data: { rating: avgRating }

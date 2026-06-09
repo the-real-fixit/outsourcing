@@ -9,6 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { ChatsService } from './chats.service';
+import { JwtService } from '@nestjs/jwt';
 
 @WebSocketGateway({
     cors: {
@@ -22,21 +23,36 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // Map userId -> socketId
     private onlineUsers = new Map<string, string>();
 
-    constructor(private readonly chatsService: ChatsService) { }
+    constructor(
+        private readonly chatsService: ChatsService,
+        private readonly jwtService: JwtService
+    ) { }
 
-    handleConnection(client: Socket) {
-        // Log removed
+    async handleConnection(client: Socket) {
+        let token = client.handshake.auth?.token || client.handshake.headers?.authorization;
+        if (token && token.startsWith('Bearer ')) {
+            token = token.split(' ')[1];
+        }
+
+        if (!token) {
+            client.disconnect(true);
+            return;
+        }
+
+        try {
+            const payload = this.jwtService.verify(token);
+            client.data.user = { id: payload.sub, email: payload.email, role: payload.role };
+            this.onlineUsers.set(payload.sub, client.id);
+        } catch (err) {
+            client.disconnect(true);
+        }
     }
 
     handleDisconnect(client: Socket) {
-        // Remove user from online map
-        for (const [userId, socketId] of this.onlineUsers.entries()) {
-            if (socketId === client.id) {
-                this.onlineUsers.delete(userId);
-                break;
-            }
+        const userId = client.data.user?.id;
+        if (userId) {
+            this.onlineUsers.delete(userId);
         }
-        // Log removed
     }
 
     @SubscribeMessage('register')
@@ -44,8 +60,7 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         @ConnectedSocket() client: Socket,
         @MessageBody() data: { userId: string },
     ) {
-        this.onlineUsers.set(data.userId, client.id);
-        // Log removed
+        // No-op for backward compatibility. Handshake auth performs connection-level registration.
     }
 
     @SubscribeMessage('sendMessage')
@@ -53,7 +68,13 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         @ConnectedSocket() client: Socket,
         @MessageBody() data: { senderId: string; peerId: string; content: string; imageUrl?: string },
     ) {
-        const { senderId, peerId, content, imageUrl } = data;
+        const senderId = client.data.user?.id;
+        if (!senderId) {
+            client.disconnect(true);
+            return;
+        }
+
+        const { peerId, content, imageUrl } = data;
 
         // Save to database
         const message = await this.chatsService.sendMessage(senderId, peerId, content, imageUrl);

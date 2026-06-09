@@ -16,9 +16,25 @@ export class JobPostsController {
         @Query('lng') lng?: string,
         @Query('department') department?: string,
         @Query('municipality') municipality?: string,
-        @Query('search') search?: string
+        @Query('search') search?: string,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string
     ) {
-        return this.jobPostsService.findAll(categoryId, status, authorRole, authorId, lat, lng, department, municipality, search);
+        const parsedPage = page ? parseInt(page, 10) : 1;
+        const parsedLimit = limit ? parseInt(limit, 10) : 20;
+        return this.jobPostsService.findAll(
+            categoryId,
+            status,
+            authorRole,
+            authorId,
+            lat,
+            lng,
+            department,
+            municipality,
+            search,
+            parsedPage,
+            parsedLimit
+        );
     }
 
     @UseGuards(AuthGuard('jwt'))

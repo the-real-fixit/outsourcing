@@ -168,6 +168,7 @@ model Chat {
   user2LastRead DateTime?
 
   @@id([user1Id, user2Id])
+  @@index([user2Id])
 }
 
 model Message {
@@ -181,7 +182,7 @@ model Message {
   chat      Chat     @relation(fields: [user1Id, user2Id], references: [user1Id, user2Id])
   createdAt DateTime @default(now())
 
-  @@index([createdAt])
+  @@index([user1Id, user2Id, createdAt])
 }
 
 model Advertisement {

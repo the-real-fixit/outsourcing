@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, UseGuards, Request, Query } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ChatsService } from './chats.service';
 
@@ -13,8 +13,14 @@ export class ChatsController {
     }
 
     @Get(':peerId')
-    async getChatHistory(@Request() req, @Param('peerId') peerId: string) {
-        return this.chatsService.getChatAndMessages(req.user.userId, peerId);
+    async getChatHistory(
+        @Request() req,
+        @Param('peerId') peerId: string,
+        @Query('limit') limit?: string,
+        @Query('cursor') cursor?: string
+    ) {
+        const parsedLimit = limit ? parseInt(limit, 10) : 50;
+        return this.chatsService.getChatAndMessages(req.user.userId, peerId, parsedLimit, cursor);
     }
 
     @Post(':peerId/messages')
