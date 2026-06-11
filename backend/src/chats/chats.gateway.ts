@@ -20,9 +20,6 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @WebSocketServer()
     server: Server;
 
-    // Map userId -> socketId
-    private onlineUsers = new Map<string, string>();
-
     constructor(
         private readonly chatsService: ChatsService,
         private readonly jwtService: JwtService
@@ -42,17 +39,14 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         try {
             const payload = this.jwtService.verify(token);
             client.data.user = { id: payload.sub, email: payload.email, role: payload.role };
-            this.onlineUsers.set(payload.sub, client.id);
+            await client.join(`user:${payload.sub}`);
         } catch (err) {
             client.disconnect(true);
         }
     }
 
     handleDisconnect(client: Socket) {
-        const userId = client.data.user?.id;
-        if (userId) {
-            this.onlineUsers.delete(userId);
-        }
+        // No-op: Socket.io automatically cleans up room memberships upon disconnection.
     }
 
     @SubscribeMessage('register')
@@ -82,11 +76,8 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         // Send to sender (confirmation)
         client.emit('newMessage', message);
 
-        // Send to peer if online
-        const peerSocketId = this.onlineUsers.get(peerId);
-        if (peerSocketId) {
-            this.server.to(peerSocketId).emit('newMessage', message);
-        }
+        // Send to peer via their private room (distributed across instances by Redis Adapter)
+        this.server.to(`user:${peerId}`).emit('newMessage', message);
     }
 
     @SubscribeMessage('offerUpdated')
@@ -94,10 +85,7 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         @ConnectedSocket() client: Socket,
         @MessageBody() data: { peerId: string },
     ) {
-        const peerSocketId = this.onlineUsers.get(data.peerId);
-        if (peerSocketId) {
-            this.server.to(peerSocketId).emit('offerUpdated');
-        }
+        this.server.to(`user:${data.peerId}`).emit('offerUpdated');
     }
 
     @SubscribeMessage('offerCompleted')
@@ -105,10 +93,7 @@ export class ChatsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         @ConnectedSocket() client: Socket,
         @MessageBody() data: { peerId: string },
     ) {
-        const peerSocketId = this.onlineUsers.get(data.peerId);
-        if (peerSocketId) {
-            this.server.to(peerSocketId).emit('offerUpdated');
-        }
+        this.server.to(`user:${data.peerId}`).emit('offerUpdated');
     }
 }
 

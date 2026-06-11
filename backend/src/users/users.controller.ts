@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Body, UseGuards, Request, Param } from '@nestjs/common';
+import { Controller, Get, Put, Body, UseGuards, Request, Param, Query } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { UsersService, UpdateProfileDto, UpdateSettingsDto } from './users.service';
 
@@ -7,8 +7,13 @@ export class UsersController {
     constructor(private readonly usersService: UsersService) { }
 
     @Get('providers')
-    async getProviders() {
-        return this.usersService.findAllProviders();
+    async getProviders(
+        @Query('page') page?: string,
+        @Query('limit') limit?: string,
+    ) {
+        const parsedPage = page ? parseInt(page, 10) : 1;
+        const parsedLimit = limit ? parseInt(limit, 10) : 20;
+        return this.usersService.findAllProviders(parsedPage, parsedLimit);
     }
 
     @Get('public/:id')

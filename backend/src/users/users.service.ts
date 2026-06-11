@@ -42,7 +42,8 @@ export class UsersService {
         });
     }
 
-    async findAllProviders(): Promise<User[]> {
+    async findAllProviders(page = 1, limit = 20): Promise<User[]> {
+        const skip = (page - 1) * limit;
         return this.prisma.user.findMany({
             where: {
                 role: 'PROVIDER'
@@ -53,7 +54,9 @@ export class UsersService {
                         category: true
                     }
                 }
-            }
+            },
+            skip,
+            take: limit,
         });
     }
 

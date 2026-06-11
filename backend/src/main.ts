@@ -2,12 +2,18 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
+import { RedisIoAdapter } from './chats/redis-io.adapter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
   // Security Headers
   app.use(helmet());
+
+  // Redis Adapter for WebSockets
+  const redisIoAdapter = new RedisIoAdapter(app);
+  await redisIoAdapter.connectToRedis();
+  app.useWebSocketAdapter(redisIoAdapter);
 
   // Flexible CORS
   app.enableCors({

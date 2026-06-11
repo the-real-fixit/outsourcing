@@ -21,11 +21,14 @@ scenarios:
   - name: "Buscar categorías y anuncios (Read-Heavy)"
     flow:
       - get:
-          url: "/api/categories"
+          url: "/categories"
       - think: 2 # simula a un usuario leyendo las categorías
       - get:
-          url: "/api/job-posts"
+          url: "/job-posts"
       - think: 3
+      - get:
+          url: "/users/providers?page=1&limit=10"
+      - think: 1
       # Simulamos un error o endpoint que a veces falla
       - get:
-          url: "/api/job-posts?search=electricista"
+          url: "/job-posts?search=electricista"
