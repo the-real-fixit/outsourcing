@@ -42,22 +42,35 @@ export class UsersService {
         });
     }
 
-    async findAllProviders(page = 1, limit = 20): Promise<User[]> {
+    async findAllProviders(page = 1, limit = 20): Promise<any> {
         const skip = (page - 1) * limit;
-        return this.prisma.user.findMany({
-            where: {
-                role: 'PROVIDER'
-            },
-            include: {
-                profile: {
-                    include: {
-                        category: true
+        const [providers, total] = await Promise.all([
+            this.prisma.user.findMany({
+                where: {
+                    role: 'PROVIDER'
+                },
+                include: {
+                    profile: {
+                        include: {
+                            category: true
+                        }
                     }
-                }
-            },
-            skip,
-            take: limit,
-        });
+                },
+                skip,
+                take: limit,
+            }),
+            this.prisma.user.count({
+                where: { role: 'PROVIDER' }
+            })
+        ]);
+
+        return {
+            providers,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit)
+        };
     }
 
     async getProfile(userId: string) {
@@ -84,12 +97,6 @@ export class UsersService {
                 profile: {
                     include: {
                         category: true,
-                        reviewsReceived: {
-                            include: {
-                                author: { select: { id: true, name: true, profile: { select: { photoUrl: true } } } }
-                            },
-                            orderBy: { createdAt: 'desc' }
-                        },
                         profileObservations: {
                             orderBy: { createdAt: 'desc' }
                         }
@@ -97,6 +104,54 @@ export class UsersService {
                 }
             }
         });
+    }
+
+    async findPublicReviews(userId: string, page = 1, limit = 5) {
+        const skip = (page - 1) * limit;
+
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { profile: { select: { id: true } } }
+        });
+
+        if (!user || !user.profile) {
+            return {
+                reviews: [],
+                total: 0,
+                page,
+                limit,
+                totalPages: 0
+            };
+        }
+
+        const [reviews, total] = await Promise.all([
+            this.prisma.review.findMany({
+                where: { profileId: user.profile.id },
+                include: {
+                    author: {
+                        select: {
+                            id: true,
+                            name: true,
+                            profile: { select: { photoUrl: true } }
+                        }
+                    }
+                },
+                orderBy: { createdAt: 'desc' },
+                skip,
+                take: limit,
+            }),
+            this.prisma.review.count({
+                where: { profileId: user.profile.id }
+            })
+        ]);
+
+        return {
+            reviews,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit)
+        };
     }
 
     async updateProfile(userId: string, data: UpdateProfileDto) {

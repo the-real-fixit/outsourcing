@@ -11,14 +11,35 @@ export class UsersController {
         @Query('page') page?: string,
         @Query('limit') limit?: string,
     ) {
-        const parsedPage = page ? parseInt(page, 10) : 1;
-        const parsedLimit = limit ? parseInt(limit, 10) : 20;
+        let parsedPage = page ? parseInt(page, 10) : 1;
+        let parsedLimit = limit ? parseInt(limit, 10) : 20;
+
+        if (isNaN(parsedPage) || parsedPage < 1) parsedPage = 1;
+        if (isNaN(parsedLimit) || parsedLimit < 1) parsedLimit = 20;
+        if (parsedLimit > 100) parsedLimit = 100; // Enforce maximum limit to prevent DB saturation
+
         return this.usersService.findAllProviders(parsedPage, parsedLimit);
     }
 
     @Get('public/:id')
     async getPublicProfile(@Param('id') id: string) {
         return this.usersService.getPublicProfile(id);
+    }
+
+    @Get('public/:id/reviews')
+    async getPublicReviews(
+        @Param('id') id: string,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string,
+    ) {
+        let parsedPage = page ? parseInt(page, 10) : 1;
+        let parsedLimit = limit ? parseInt(limit, 10) : 5;
+
+        if (isNaN(parsedPage) || parsedPage < 1) parsedPage = 1;
+        if (isNaN(parsedLimit) || parsedLimit < 1) parsedLimit = 5;
+        if (parsedLimit > 50) parsedLimit = 50; // Enforce maximum limit to prevent DB saturation
+
+        return this.usersService.findPublicReviews(id, parsedPage, parsedLimit);
     }
 
     @UseGuards(AuthGuard('jwt'))

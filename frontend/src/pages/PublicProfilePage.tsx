@@ -42,7 +42,7 @@ interface PublicProfile {
         category?: {
             name: string;
         };
-        reviewsReceived: Review[];
+        reviewsReceived?: Review[];
         profileObservations: Observation[];
     } | null;
 }
@@ -55,11 +55,43 @@ const PublicProfilePage = () => {
     const [loading, setLoading] = useState(true);
     const [showPhone, setShowPhone] = useState(false);
 
+    // Pagination state for reviews
+    const [reviews, setReviews] = useState<Review[]>([]);
+    const [reviewsPage, setReviewsPage] = useState(1);
+    const [totalReviews, setTotalReviews] = useState(0);
+    const [hasMoreReviews, setHasMoreReviews] = useState(false);
+    const [loadingReviews, setLoadingReviews] = useState(false);
+
+    const fetchReviews = async (page: number, append = false) => {
+        setLoadingReviews(true);
+        try {
+            const response = await api.get(`/users/public/${id}/reviews`, {
+                params: { page, limit: 5 }
+            });
+            const { reviews: newReviews, total } = response.data;
+            if (append) {
+                setReviews(prev => [...prev, ...newReviews]);
+            } else {
+                setReviews(newReviews);
+            }
+            setTotalReviews(total);
+            setHasMoreReviews(page * 5 < total);
+        } catch (error) {
+            console.error("Error fetching public reviews:", error);
+        } finally {
+            setLoadingReviews(false);
+        }
+    };
+
     useEffect(() => {
         const fetchProfile = async () => {
+            setLoading(true);
             try {
                 const response = await api.get(`/users/public/${id}`);
                 setProfileData(response.data);
+                // Fetch first page of reviews
+                await fetchReviews(1, false);
+                setReviewsPage(1);
             } catch (error) {
                 console.error("Error fetching public profile:", error);
             } finally {
@@ -68,6 +100,12 @@ const PublicProfilePage = () => {
         };
         fetchProfile();
     }, [id]);
+
+    const handleLoadMoreReviews = () => {
+        const nextPage = reviewsPage + 1;
+        fetchReviews(nextPage, true);
+        setReviewsPage(nextPage);
+    };
 
     if (loading) {
         return <div className="flex justify-center items-center h-64">Cargando perfil...</div>;
@@ -87,7 +125,6 @@ const PublicProfilePage = () => {
     const { name, profile } = profileData;
     const bioLines = profile?.bio ? profile.bio.split('\n') : ['Sin descripción proporcionada.'];
     const rating = profile?.rating || 0;
-    const reviews = profile?.reviewsReceived || [];
     const observations = profile?.profileObservations || [];
 
     return (
@@ -229,7 +266,9 @@ const PublicProfilePage = () => {
 
                     {/* Reviews / Comments */}
                     <div>
-                        <h2 className="text-lg font-bold text-gray-900 mb-4">Comentarios</h2>
+                        <h2 className="text-lg font-bold text-gray-900 mb-4">
+                            Comentarios {totalReviews > 0 ? `(${totalReviews})` : ''}
+                        </h2>
                         {reviews.length === 0 ? (
                             <p className="text-sm text-gray-500">Sin comentarios aún.</p>
                         ) : (
@@ -259,6 +298,19 @@ const PublicProfilePage = () => {
                                         <p className="text-[10px] text-gray-400 mt-2">{new Date(review.createdAt).toLocaleDateString()}</p>
                                     </div>
                                 ))}
+
+                                {hasMoreReviews && (
+                                    <button
+                                        onClick={handleLoadMoreReviews}
+                                        disabled={loadingReviews}
+                                        className="w-full py-2.5 px-4 bg-gray-100 hover:bg-yellow-100 text-gray-700 hover:text-yellow-700 rounded-xl font-bold text-sm transition-all duration-200 border border-gray-200/50 flex items-center justify-center gap-2 disabled:opacity-50"
+                                    >
+                                        {loadingReviews ? (
+                                            <span className="w-4 h-4 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin" />
+                                        ) : null}
+                                        {loadingReviews ? 'Cargando...' : 'Cargar más comentarios'}
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
