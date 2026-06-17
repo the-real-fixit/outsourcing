@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { Save, User as UserIcon, Upload, Check } from 'lucide-react';
 import LocationSelector from '../components/common/LocationSelector';
+import { uploadFileToCloudinary } from '../utils/uploadHelper';
 
 const ProfilePage = () => {
     const { user } = useAuth();
@@ -90,15 +91,8 @@ const ProfilePage = () => {
         if (!file) return;
         setUploadingPhoto(true);
         try {
-            const formDataUpload = new FormData();
-            formDataUpload.append('files', file);
-            const uploadRes = await api.post('/upload', formDataUpload, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
-            const uploadedUrls: string[] = uploadRes.data.urls || [];
-            if (uploadedUrls.length > 0) {
-                setFormData(prev => ({ ...prev, photoUrl: uploadedUrls[0] }));
-            }
+            const url = await uploadFileToCloudinary(file);
+            setFormData(prev => ({ ...prev, photoUrl: url }));
         } catch (error) {
             console.error('Error uploading profile photo:', error);
             alert('Error al subir la foto. Intenta de nuevo.');

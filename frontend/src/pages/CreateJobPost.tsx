@@ -4,6 +4,7 @@ import api from '../services/api';
 import { FilePlus, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import LocationSelector from '../components/common/LocationSelector';
+import { uploadFileToCloudinary } from '../utils/uploadHelper';
 
 const CreateJobPost = () => {
     const navigate = useNavigate();
@@ -64,15 +65,9 @@ const CreateJobPost = () => {
             let uploadedPhotos: string[] = [];
 
             if (selectedFiles.length > 0) {
-                const uploadData = new FormData();
-                selectedFiles.forEach(file => {
-                    uploadData.append('files', file);
-                });
-
-                const uploadRes = await api.post('/upload', uploadData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
-                uploadedPhotos = uploadRes.data.urls; // Assuming endpoint returns { urls: string[] }
+                uploadedPhotos = await Promise.all(
+                    selectedFiles.map(file => uploadFileToCloudinary(file))
+                );
             }
 
             const payload = {

@@ -4,6 +4,7 @@ import { io, Socket } from 'socket.io-client';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Send, ChevronLeft, User as UserIcon, MessageSquare, FileText, CheckCircle, XCircle, Clock, Paperclip, Edit2, X, Star, PartyPopper } from 'lucide-react';
+import { uploadFileToCloudinary } from '../utils/uploadHelper';
 
 interface ChatSummary {
     user1Id: string;
@@ -297,16 +298,10 @@ const ChatPage = () => {
         if (!files || files.length === 0 || !user || !peerId) return;
 
         setUploadingImage(true);
-        const formData = new FormData();
-        Array.from(files).forEach(file => {
-            formData.append('files', file);
-        });
-
         try {
-            const res = await api.post('/upload', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
-            const imageUrls: string[] = res.data.urls;
+            const imageUrls = await Promise.all(
+                Array.from(files).map(file => uploadFileToCloudinary(file))
+            );
             for (const url of imageUrls) {
                 await handleSend(url);
             }
