@@ -94,7 +94,7 @@ const RegisterPage = () => {
                     await api.put('/users/profile', {
                         name,
                         phone: fullPhone,
-                        categoryId: categoryIds[0] || null,
+                        categoryIds: categoryIds.length > 0 ? categoryIds : undefined,
                         canTravel,
                         hasVehicle,
                         travelDetails: travelDetails || null

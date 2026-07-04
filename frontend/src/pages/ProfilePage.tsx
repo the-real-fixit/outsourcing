@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
-import { Save, User as UserIcon, Upload, Check } from 'lucide-react';
+import { Save, User as UserIcon, Upload, Check, Tag } from 'lucide-react';
 import LocationSelector from '../components/common/LocationSelector';
 import { uploadFileToCloudinary } from '../utils/uploadHelper';
 
@@ -21,7 +21,7 @@ const ProfilePage = () => {
         municipality: '',
         lat: null as number | null,
         lng: null as number | null,
-        categoryId: '',
+        categoryIds: [] as string[],
         photoUrl: ''
     });
 
@@ -43,7 +43,7 @@ const ProfilePage = () => {
                     municipality: profile.municipality || '',
                     lat: profile.lat || null,
                     lng: profile.lng || null,
-                    categoryId: profile.categoryId || '',
+                    categoryIds: profile.categories?.map((c: any) => c.id) || [],
                     photoUrl: profile.photoUrl || ''
                 });
                 setCategories(catRes.data);
@@ -84,6 +84,15 @@ const ProfilePage = () => {
             formatted = digits.slice(0, 4) + '-' + digits.slice(4, 8);
         }
         setFormData(prev => ({ ...prev, phone: formatted }));
+    };
+
+    const toggleCategory = (id: string) => {
+        setFormData(prev => ({
+            ...prev,
+            categoryIds: prev.categoryIds.includes(id) 
+                ? prev.categoryIds.filter(c => c !== id) 
+                : [...prev.categoryIds, id]
+        }));
     };
 
     const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -179,19 +188,31 @@ const ProfilePage = () => {
 
                             {user?.role === 'PROVIDER' && (
                                 <div className="sm:col-span-6">
-                                    <label htmlFor="categoryId" className="block text-sm font-bold text-gray-700 mb-1">Especialidad / Categoría Principal</label>
-                                    <select
-                                        id="categoryId"
-                                        name="categoryId"
-                                        value={formData.categoryId}
-                                        onChange={handleChange}
-                                        className="block w-full px-4 py-2 rounded-md focus:ring-yellow-500 focus:border-yellow-500 text-sm border-gray-300 border shadow-sm outline-none bg-white"
-                                    >
-                                        <option value="">Selecciona tu especialidad...</option>
-                                        {categories.map(cat => (
-                                            <option key={cat.id} value={cat.id}>{cat.name}</option>
-                                        ))}
-                                    </select>
+                                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                                        <Tag size={16} className="inline mr-1 text-gray-500" />
+                                        Especialidades / Categorías
+                                        <span className="ml-1 text-xs font-normal text-gray-400">(selecciona una o más)</span>
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {categories.map(cat => {
+                                            const selected = formData.categoryIds.includes(cat.id);
+                                            return (
+                                                <button
+                                                    key={cat.id}
+                                                    type="button"
+                                                    onClick={() => toggleCategory(cat.id)}
+                                                    className={`px-3 py-1.5 rounded-full text-sm font-medium border-2 transition-all duration-150 ${
+                                                        selected
+                                                            ? 'border-yellow-500 bg-yellow-50 text-yellow-800'
+                                                            : 'border-gray-200 bg-white text-gray-600 hover:border-yellow-300'
+                                                    }`}
+                                                >
+                                                    {selected && <span className="mr-1">✓</span>}
+                                                    {cat.name}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             )}
 

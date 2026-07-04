@@ -39,9 +39,10 @@ interface PublicProfile {
         canTravel?: boolean;
         hasVehicle?: boolean;
         travelDetails?: string;
-        category?: {
+        categories?: {
+            id: string;
             name: string;
-        };
+        }[];
         reviewsReceived?: Review[];
         profileObservations: Observation[];
     } | null;
@@ -194,10 +195,14 @@ const PublicProfilePage = () => {
                                     ? `${profile.municipality}, ${profile.department}`
                                     : profile?.address || 'Ubicación no especificada'}
                             </p>
-                            {profile?.category && (
-                                <span className="inline-block mt-2 px-3 py-1 bg-yellow-100 text-yellow-800 text-sm font-semibold rounded-full">
-                                    {profile.category.name}
-                                </span>
+                            {profile?.categories && profile.categories.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                    {profile.categories.map(cat => (
+                                        <span key={cat.id} className="inline-block px-3 py-1 bg-yellow-100 text-yellow-800 text-sm font-semibold rounded-full">
+                                            {cat.name}
+                                        </span>
+                                    ))}
+                                </div>
                             )}
                         </div>
                         <div className="flex items-center gap-3 mt-4 sm:mt-0">

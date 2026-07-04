@@ -55,11 +55,9 @@ model Profile {
   user                User                 @relation(fields: [userId], references: [id])
   reviewsReceived     Review[]             @relation("ReviewRecipient")
   profileObservations ProfileObservation[]
-  category            Category?            @relation(fields: [categoryId], references: [id])
-  categoryId          String?
+  categories          Category[]
   promotedAds         PromotedAd[]
 
-  @@index([categoryId])
   @@index([department, municipality])
   @@index([rating(sort: Desc)])
 }

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { User, Prisma } from '@prisma/client';
-import { IsString, IsOptional, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsArray } from 'class-validator';
 
 export class UpdateProfileDto {
     @IsOptional() @IsString() bio?: string;
@@ -12,7 +12,7 @@ export class UpdateProfileDto {
     @IsOptional() @IsString() municipality?: string;
     @IsOptional() lat?: number | string;
     @IsOptional() lng?: number | string;
-    @IsOptional() @IsString() categoryId?: string;
+    @IsOptional() @IsArray() categoryIds?: string[];
     @IsOptional() @IsString() name?: string;
     @IsOptional() @IsBoolean() canTravel?: boolean;
     @IsOptional() @IsBoolean() hasVehicle?: boolean;
@@ -52,7 +52,7 @@ export class UsersService {
                 include: {
                     profile: {
                         include: {
-                            category: true
+                            categories: true
                         }
                     }
                 },
@@ -79,7 +79,7 @@ export class UsersService {
             include: {
                 profile: {
                     include: {
-                        category: true
+                        categories: true
                     }
                 }
             }
@@ -96,7 +96,7 @@ export class UsersService {
                 role: true,
                 profile: {
                     include: {
-                        category: true,
+                        categories: true,
                         profileObservations: {
                             orderBy: { createdAt: 'desc' }
                         }
@@ -155,7 +155,7 @@ export class UsersService {
     }
 
     async updateProfile(userId: string, data: UpdateProfileDto) {
-        let { bio, photoUrl, phone, address, department, municipality, lat, lng, categoryId, name, canTravel, hasVehicle, travelDetails } = data;
+        let { bio, photoUrl, phone, address, department, municipality, lat, lng, categoryIds, name, canTravel, hasVehicle, travelDetails } = data;
 
         if (name) {
             await this.prisma.user.update({
@@ -164,14 +164,23 @@ export class UsersService {
             });
         }
 
-        let categoryIdNullable = categoryId ? categoryId : null;
         let latNumber = lat ? parseFloat(lat as string) : null;
         let lngNumber = lng ? parseFloat(lng as string) : null;
 
         await this.prisma.profile.upsert({
             where: { userId },
-            update: { bio, photoUrl, phone, address, department, municipality, lat: latNumber, lng: lngNumber, categoryId: categoryIdNullable, canTravel: canTravel ?? false, hasVehicle: hasVehicle ?? false, travelDetails: travelDetails || null },
-            create: { userId, bio, photoUrl, phone, address, department, municipality, lat: latNumber, lng: lngNumber, categoryId: categoryIdNullable, canTravel: canTravel ?? false, hasVehicle: hasVehicle ?? false, travelDetails: travelDetails || null }
+            update: { 
+                bio, photoUrl, phone, address, department, municipality, 
+                lat: latNumber, lng: lngNumber, 
+                canTravel: canTravel ?? false, hasVehicle: hasVehicle ?? false, travelDetails: travelDetails || null,
+                categories: categoryIds ? { set: categoryIds.map(id => ({ id })) } : undefined
+            },
+            create: { 
+                userId, bio, photoUrl, phone, address, department, municipality, 
+                lat: latNumber, lng: lngNumber, 
+                canTravel: canTravel ?? false, hasVehicle: hasVehicle ?? false, travelDetails: travelDetails || null,
+                categories: categoryIds ? { connect: categoryIds.map(id => ({ id })) } : undefined
+            }
         });
 
         return this.getProfile(userId);
