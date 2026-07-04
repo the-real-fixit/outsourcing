@@ -1,8 +1,39 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { UserPlus, Mail, Lock, User, Briefcase, UserCircle, ArrowRight, ArrowLeft, Car, Navigation, Tag, ChevronRight } from 'lucide-react';
+import { UserPlus, Mail, Lock, LockKeyhole, Eye, EyeOff, User, Briefcase, UserCircle, ArrowRight, ArrowLeft, Car, Navigation, Tag, ChevronRight, Phone } from 'lucide-react';
 import api from '../services/api';
+
+const PHONE_CODES = [
+    { code: '+502', label: '🇬🇹 GT +502' },
+    { code: '+1',   label: '🇺🇸 US/CA +1' },
+    { code: '+52',  label: '🇲🇽 MX +52' },
+    { code: '+503', label: '🇸🇻 SV +503' },
+    { code: '+504', label: '🇭🇳 HN +504' },
+    { code: '+505', label: '🇳🇮 NI +505' },
+    { code: '+506', label: '🇨🇷 CR +506' },
+    { code: '+507', label: '🇵🇦 PA +507' },
+    { code: '+34',  label: '🇪🇸 ES +34' },
+];
+
+function getPasswordStrength(pw: string): { score: number; label: string; color: string } {
+    if (!pw) return { score: 0, label: '', color: '' };
+    let score = 0;
+    if (pw.length >= 8) score++;
+    if (/[A-Z]/.test(pw)) score++;
+    if (/[a-z]/.test(pw)) score++;
+    if (/[0-9]/.test(pw)) score++;
+    if (/[^A-Za-z0-9]/.test(pw)) score++;
+    const map: Record<number, { label: string; color: string }> = {
+        0: { label: 'Muy débil', color: '#ef4444' },
+        1: { label: 'Débil',    color: '#f97316' },
+        2: { label: 'Regular',  color: '#eab308' },
+        3: { label: 'Buena',    color: '#84cc16' },
+        4: { label: 'Fuerte',   color: '#22c55e' },
+        5: { label: '¡Excelente!', color: '#16a34a' },
+    };
+    return { score, ...map[score] };
+}
 
 const RegisterPage = () => {
     const navigate = useNavigate();
@@ -21,12 +52,15 @@ const RegisterPage = () => {
     const { register } = useAuth();
 
     // Provider-specific
-    const [categoryId, setCategoryId] = useState('');
+    const [categoryIds, setCategoryIds] = useState<string[]>([]);
     const [canTravel, setCanTravel] = useState(false);
     const [hasVehicle, setHasVehicle] = useState(false);
     const [travelDetails, setTravelDetails] = useState('');
     const [categories, setCategories] = useState<{ id: string, name: string }[]>([]);
     const [phone, setPhone] = useState('');
+    const [phoneCode, setPhoneCode] = useState('+502');
+    const [showPassword, setShowPassword] = useState(false);
+    const passwordStrength = getPasswordStrength(password);
 
     useEffect(() => {
         const fetchCategories = async () => {
@@ -54,12 +88,13 @@ const RegisterPage = () => {
         try {
             await register({ name, email, password, role });
             // After registration, save profile data if provider
+            const fullPhone = phone ? `${phoneCode} ${phone}` : undefined;
             if (role === 'PROVIDER') {
                 try {
                     await api.put('/users/profile', {
                         name,
-                        phone,
-                        categoryId: categoryId || null,
+                        phone: fullPhone,
+                        categoryId: categoryIds[0] || null,
                         canTravel,
                         hasVehicle,
                         travelDetails: travelDetails || null
@@ -68,9 +103,9 @@ const RegisterPage = () => {
                     console.error('Error saving profile after registration:', profileErr);
                 }
             } else {
-                if (phone) {
+                if (fullPhone) {
                     try {
-                        await api.put('/users/profile', { name, phone });
+                        await api.put('/users/profile', { name, phone: fullPhone });
                     } catch (profileErr) {
                         console.error('Error saving profile after registration:', profileErr);
                     }
@@ -83,8 +118,14 @@ const RegisterPage = () => {
         }
     };
 
+    const toggleCategory = (id: string) => {
+        setCategoryIds(prev =>
+            prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
+        );
+    };
+
     const canAdvance = () => {
-        if (step === 1) return email.trim() !== '' && password.trim() !== '' && password.length >= 6;
+        if (step === 1) return email.trim() !== '' && passwordStrength.score >= 2;
         if (step === 2) return role !== '' && name.trim() !== '';
         return true;
     };
@@ -159,22 +200,49 @@ const RegisterPage = () => {
                                     />
                                 </div>
                             </div>
-
                             <div>
-                                <label htmlFor="password" className="block text-sm font-medium text-gray-700">Contrase&ntilde;a</label>
+                                <label htmlFor="password" className="block text-sm font-medium text-gray-700">Contraseña</label>
                                 <div className="mt-1 relative rounded-md shadow-sm">
                                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <Lock className="h-5 w-5 text-gray-400" />
+                                        <LockKeyhole className="h-5 w-5 text-gray-400" />
                                     </div>
                                     <input
-                                        id="password" type="password" autoComplete="new-password" required
-                                        value={password} onChange={(e) => setPassword(e.target.value)}
-                                        className="focus:ring-yellow-500 focus:border-yellow-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2.5 px-3 border"
-                                        placeholder="Mínimo 6 caracteres"
+                                        id="password"
+                                        type={showPassword ? 'text' : 'password'}
+                                        autoComplete="new-password"
+                                        required
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        className="focus:ring-yellow-500 focus:border-yellow-500 block w-full pl-10 pr-10 sm:text-sm border-gray-300 rounded-md py-2.5 px-3 border"
+                                        placeholder="Mínimo 8 caracteres"
                                     />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(v => !v)}
+                                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                                        tabIndex={-1}
+                                    >
+                                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </button>
                                 </div>
-                                {password.length > 0 && password.length < 6 && (
-                                    <p className="mt-1 text-xs text-red-500">La contraseña debe tener al menos 6 caracteres.</p>
+
+                                {/* Password strength meter */}
+                                {password.length > 0 && (
+                                    <div className="mt-2">
+                                        <div className="flex gap-1 mb-1">
+                                            {[1,2,3,4,5].map(i => (
+                                                <div
+                                                    key={i}
+                                                    className="h-1.5 flex-1 rounded-full transition-all duration-300"
+                                                    style={{ backgroundColor: i <= passwordStrength.score ? passwordStrength.color : '#e5e7eb' }}
+                                                />
+                                            ))}
+                                        </div>
+                                        <p className="text-xs" style={{ color: passwordStrength.color }}>
+                                            {passwordStrength.label}
+                                            {passwordStrength.score < 3 && ' — usa mayúsculas, números y símbolos'}
+                                        </p>
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -201,14 +269,25 @@ const RegisterPage = () => {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono (opcional)</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    <Phone className="inline h-4 w-4 mr-1 text-gray-400" />
+                                    Teléfono (opcional)
+                                </label>
                                 <div className="flex">
-                                    <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm font-bold">
-                                        GT +502
-                                    </span>
+                                    <select
+                                        value={phoneCode}
+                                        onChange={e => setPhoneCode(e.target.value)}
+                                        className="inline-flex items-center pl-2 pr-1 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-700 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                                    >
+                                        {PHONE_CODES.map(p => (
+                                            <option key={p.code} value={p.code}>{p.label}</option>
+                                        ))}
+                                    </select>
                                     <input
-                                        type="tel" value={phone} onChange={(e) => handlePhoneChange(e.target.value)}
-                                        maxLength={9}
+                                        type="tel"
+                                        value={phone}
+                                        onChange={(e) => handlePhoneChange(e.target.value)}
+                                        maxLength={12}
                                         className="focus:ring-yellow-500 focus:border-yellow-500 block w-full rounded-none rounded-r-md sm:text-sm border-gray-300 py-2.5 px-3 border"
                                         placeholder="1234-5678"
                                     />
@@ -246,19 +325,34 @@ const RegisterPage = () => {
 
                         <div className="space-y-5">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
                                     <Tag size={14} className="inline mr-1" />
-                                    Especialidad / Categoría
+                                    Especialidades / Categorías
+                                    <span className="ml-1 text-xs text-gray-400">(selecciona una o más)</span>
                                 </label>
-                                <select
-                                    value={categoryId} onChange={(e) => setCategoryId(e.target.value)}
-                                    className="block w-full px-4 py-2.5 rounded-md focus:ring-yellow-500 focus:border-yellow-500 text-sm border-gray-300 border shadow-sm outline-none bg-white"
-                                >
-                                    <option value="">Selecciona tu especialidad...</option>
-                                    {categories.map(cat => (
-                                        <option key={cat.id} value={cat.id}>{cat.name}</option>
-                                    ))}
-                                </select>
+                                <div className="flex flex-wrap gap-2">
+                                    {categories.map(cat => {
+                                        const selected = categoryIds.includes(cat.id);
+                                        return (
+                                            <button
+                                                key={cat.id}
+                                                type="button"
+                                                onClick={() => toggleCategory(cat.id)}
+                                                className={`px-3 py-1.5 rounded-full text-sm font-medium border-2 transition-all duration-150 ${
+                                                    selected
+                                                        ? 'border-yellow-500 bg-yellow-50 text-yellow-800'
+                                                        : 'border-gray-200 bg-white text-gray-600 hover:border-yellow-300'
+                                                }`}
+                                            >
+                                                {selected && <span className="mr-1">✓</span>}
+                                                {cat.name}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                {categoryIds.length === 0 && (
+                                    <p className="mt-1 text-xs text-gray-400">Puedes seleccionar varias especialidades.</p>
+                                )}
                             </div>
 
                             <div className="space-y-3">

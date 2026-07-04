@@ -16,19 +16,22 @@ export class UploadsController {
     getUploadSignature() {
         const timestamp = Math.round(new Date().getTime() / 1000);
         const folder = 'fixit_uploads';
-        
-        // Generate signature
+        const resourceType = 'image';
+
+        // Generate signature — must include all params sent to Cloudinary
         const signature = cloudinary.utils.api_sign_request(
             { timestamp, folder },
             process.env.CLOUDINARY_API_SECRET || ''
         );
-        
+
         return {
             signature,
             timestamp,
             apiKey: process.env.CLOUDINARY_API_KEY,
             cloudName: process.env.CLOUDINARY_CLOUD_NAME,
-            folder
+            folder,
+            resourceType,
         };
     }
 }
+
