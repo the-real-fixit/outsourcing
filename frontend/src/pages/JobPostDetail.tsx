@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { MapPin, Banknote, Calendar, User, ChevronLeft, Star, CheckCircle, PlayCircle, XCircle, Car, Navigation, FileText, X, Clock, Send } from 'lucide-react';
+import { MapPin, Banknote, Calendar, User, ChevronLeft, ChevronRight, Star, CheckCircle, PlayCircle, XCircle, Car, Navigation, FileText, X, Clock, Send } from 'lucide-react';
 
 interface JobPost {
     id: string;
@@ -51,6 +51,7 @@ const JobPostDetail = () => {
     const [post, setPost] = useState<JobPost | null>(null);
     const [loading, setLoading] = useState(true);
     const [updatingStatus, setUpdatingStatus] = useState(false);
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
     // Offer form
     const [showOfferForm, setShowOfferForm] = useState(false);
@@ -142,18 +143,50 @@ const JobPostDetail = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Main Column */}
                     <div className="lg:col-span-2">
-                        <div className="bg-white shadow rounded-lg overflow-hidden border border-gray-100">
-                            {/* Header Image / Photos */}
+                        <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden mb-8 relative">
+                            {/* Image Carousel */}
                             {post.photos && post.photos.length > 0 && (
-                                <div className="w-full h-64 sm:h-96 bg-gray-200 border-b border-gray-100 overflow-x-auto flex snap-x snap-mandatory">
-                                    {post.photos.map((photo, index) => (
-                                        <img
-                                            key={index}
-                                            src={photo}
-                                            alt={`Foto ${index + 1}`}
-                                            className="h-full w-full sm:w-auto object-cover snap-center flex-shrink-0"
-                                        />
-                                    ))}
+                                <div className="h-64 sm:h-80 md:h-96 w-full bg-black relative flex items-center justify-center group overflow-hidden">
+                                    {/* Background blurred image for nice effect */}
+                                    <div 
+                                        className="absolute inset-0 opacity-30 blur-md scale-110" 
+                                        style={{ backgroundImage: `url(${post.photos[currentImageIndex]})`, backgroundPosition: 'center', backgroundSize: 'cover' }}
+                                    />
+                                    
+                                    <img
+                                        src={post.photos[currentImageIndex]}
+                                        alt={`Foto ${currentImageIndex + 1}`}
+                                        className="h-full w-full object-contain relative z-10"
+                                    />
+
+                                    {/* Navigation Arrows */}
+                                    {post.photos.length > 1 && (
+                                        <>
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); setCurrentImageIndex(prev => prev === 0 ? post.photos!.length - 1 : prev - 1); }}
+                                                className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 hover:bg-black/80 text-white rounded-full z-20 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                            >
+                                                <ChevronLeft size={24} />
+                                            </button>
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); setCurrentImageIndex(prev => prev === post.photos!.length - 1 ? 0 : prev + 1); }}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 hover:bg-black/80 text-white rounded-full z-20 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                            >
+                                                <ChevronRight size={24} />
+                                            </button>
+                                            
+                                            {/* Dots Indicator */}
+                                            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-20">
+                                                {post.photos.map((_, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => setCurrentImageIndex(idx)}
+                                                        className={`w-2 h-2 rounded-full transition-all ${idx === currentImageIndex ? 'bg-white scale-125' : 'bg-white/50 hover:bg-white/80'}`}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             )}
 
