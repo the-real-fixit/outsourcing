@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { FilePlus, X } from 'lucide-react';
+import { FilePlus, X, ImagePlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import LocationSelector from '../components/common/LocationSelector';
-import { uploadFileToCloudinary } from '../utils/uploadHelper';
+import { uploadFileToCloudinary, validateImageFile } from '../utils/uploadHelper';
 
 const CreateJobPost = () => {
     const navigate = useNavigate();
@@ -28,6 +28,10 @@ const CreateJobPost = () => {
     });
 
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+    const [filePreviews, setFilePreviews] = useState<string[]>([]);
+    const [fileError, setFileError] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
 
     useEffect(() => {
         const fetchCategories = async () => {
@@ -49,25 +53,68 @@ const CreateJobPost = () => {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
             const newFiles = Array.from(e.target.files);
+            setFileError(null);
+
+            const validFiles: File[] = [];
+            for (const file of newFiles) {
+                try {
+                    validateImageFile(file);
+                    validFiles.push(file);
+                } catch (err: any) {
+                    setFileError(err.message);
+                    return; // Stop processing on first invalid file
+                }
+            }
+
             setSelectedFiles(prev => {
                 const existingNames = new Set(prev.map(f => f.name));
-                const uniqueNewFiles = newFiles.filter(f => !existingNames.has(f.name));
-                return [...prev, ...uniqueNewFiles];
+                const uniqueNewFiles = validFiles.filter(f => !existingNames.has(f.name));
+                const merged = [...prev, ...uniqueNewFiles];
+
+                // Generate previews for new files
+                uniqueNewFiles.forEach(file => {
+                    const url = URL.createObjectURL(file);
+                    setFilePreviews(prevPreviews => [...prevPreviews, url]);
+                });
+
+                return merged;
             });
+
+            // Reset input so the same file can be re-added after removal
+            if (fileInputRef.current) fileInputRef.current.value = '';
         }
+    };
+
+    const removeFile = (index: number) => {
+        setFilePreviews(prev => {
+            URL.revokeObjectURL(prev[index]); // Free memory
+            return prev.filter((_, i) => i !== index);
+        });
+        setSelectedFiles(prev => prev.filter((_, i) => i !== index));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        setFileError(null);
         try {
-            // First upload files if any
-            let uploadedPhotos: string[] = [];
+            // Upload files individually, collecting any per-file errors
+            const uploadedPhotos: string[] = [];
+            const uploadErrors: string[] = [];
 
-            if (selectedFiles.length > 0) {
-                uploadedPhotos = await Promise.all(
-                    selectedFiles.map(file => uploadFileToCloudinary(file))
-                );
+            for (const file of selectedFiles) {
+                try {
+                    const url = await uploadFileToCloudinary(file);
+                    uploadedPhotos.push(url);
+                } catch (err: any) {
+                    uploadErrors.push(`• ${file.name}: ${err.message}`);
+                }
+            }
+
+            if (uploadErrors.length > 0) {
+                setFileError(`No se pudieron subir las siguientes imágenes:\n${uploadErrors.join('\n')}`);
+                setLoading(false);
+                return;
             }
 
             const payload = {
@@ -76,11 +123,12 @@ const CreateJobPost = () => {
             };
 
             await api.post('/job-posts', payload);
-            alert("¡Anuncio publicado exitosamente!");
+            alert('¡Anuncio publicado exitosamente!');
             navigate('/app');
-        } catch (error) {
-            console.error("Error posting job:", error);
-            alert("No se pudo publicar el anuncio o subir imágenes.");
+        } catch (error: any) {
+            console.error('Error posting job:', error);
+            const errMsg = error?.response?.data?.message || error.message || 'Error desconocido';
+            alert(`No se pudo publicar el anuncio.\nDetalle: ${errMsg}`);
         } finally {
             setLoading(false);
         }
@@ -182,31 +230,63 @@ const CreateJobPost = () => {
                         </div>
 
                         <div>
-                            <label htmlFor="photos" className="block text-sm font-bold text-gray-700 mb-1">Imágenes de referencia</label>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">
+                                Imágenes de referencia
+                            </label>
+
+                            {/* Drop zone / button */}
+                            <div
+                                onClick={() => fileInputRef.current?.click()}
+                                className="mt-1 flex flex-col items-center justify-center w-full border-2 border-dashed border-gray-300 rounded-lg p-6 cursor-pointer hover:border-yellow-400 hover:bg-yellow-50 transition-colors"
+                            >
+                                <ImagePlus className="h-8 w-8 text-gray-400 mb-2" />
+                                <p className="text-sm text-gray-500">
+                                    <span className="font-semibold text-yellow-600">Haz clic para agregar imágenes</span>
+                                </p>
+                                <p className="text-xs text-gray-400 mt-1">
+                                    JPG, PNG, WEBP, GIF, BMP, SVG, TIFF, AVIF, HEIC — hasta 10 MB por imagen
+                                </p>
+                            </div>
+
                             <input
+                                ref={fileInputRef}
                                 type="file"
                                 id="photos"
                                 multiple
-                                accept="image/*,.pdf,.doc,.docx"
+                                accept="image/*"
                                 onChange={handleFileChange}
-                                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-yellow-50 file:text-yellow-700 hover:file:bg-yellow-100"
+                                className="hidden"
                             />
-                            <p className="mt-1 text-xs text-gray-500">Puedes seleccionar una o más imágenes desde tus archivos.</p>
 
+                            {/* Error message */}
+                            {fileError && (
+                                <p className="mt-2 text-sm text-red-600 whitespace-pre-line">
+                                    {fileError}
+                                </p>
+                            )}
+
+                            {/* Thumbnail previews */}
                             {selectedFiles.length > 0 && (
-                                <div className="mt-3 flex flex-wrap gap-2">
+                                <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
                                     {selectedFiles.map((file, i) => (
-                                        <span key={i} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 gap-1">
-                                            {file.name}
+                                        <div key={i} className="relative group rounded-lg overflow-hidden border border-gray-200 aspect-square bg-gray-100">
+                                            <img
+                                                src={filePreviews[i]}
+                                                alt={file.name}
+                                                className="w-full h-full object-cover"
+                                            />
                                             <button
                                                 type="button"
-                                                onClick={() => setSelectedFiles(prev => prev.filter((_, idx) => idx !== i))}
-                                                className="ml-1 p-0.5 rounded-full hover:bg-red-100 hover:text-red-600 transition-colors"
+                                                onClick={() => removeFile(i)}
+                                                className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
                                                 title="Quitar imagen"
                                             >
-                                                <X size={12} />
+                                                <X size={14} />
                                             </button>
-                                        </span>
+                                            <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-1 py-0.5 truncate opacity-0 group-hover:opacity-100 transition-opacity">
+                                                {file.name}
+                                            </div>
+                                        </div>
                                     ))}
                                 </div>
                             )}
