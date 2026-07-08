@@ -22,6 +22,7 @@ export interface Offer {
     description: string;
     price: number;
     estimatedDays: number | null;
+    estimatedHours: number | null;
     status: string;
     senderId: string;
     receiverId: string;

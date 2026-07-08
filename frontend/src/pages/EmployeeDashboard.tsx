@@ -33,7 +33,7 @@ const EmployeeDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'feed' | 'my-ads'>('feed');
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-    const [profileStats, setProfileStats] = useState({ rating: 0, jobsCompleted: 0, hours: 0 });
+    const [profileStats, setProfileStats] = useState({ rating: 0, jobsCompleted: 0, days: 0, hours: 0 });
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const urlSearch = searchParams.get('search') || '';
@@ -51,6 +51,7 @@ const EmployeeDashboard = () => {
                         setProfileStats({
                             rating: profile.rating || 0,
                             jobsCompleted: profile.jobsCompleted || 0,
+                            days: profile.days || 0,
                             hours: profile.hours || 0,
                         });
                         const params = new URLSearchParams();
@@ -138,8 +139,11 @@ const EmployeeDashboard = () => {
                             <Clock size={24} />
                         </div>
                         <div>
-                            <p className="text-gray-500 text-sm">Horas Registradas</p>
-                            <p className="text-2xl font-bold text-gray-800">{profileStats.hours}h</p>
+                            <p className="text-gray-500 text-sm">Tiempo Registrado</p>
+                            <p className="text-lg font-bold text-gray-800">
+                                {profileStats.days ? `${profileStats.days}d ` : ''}
+                                {profileStats.hours}h
+                            </p>
                         </div>
                     </div>
                 </div>

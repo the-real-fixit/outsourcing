@@ -5,6 +5,7 @@ export interface EditFields {
     desc: string;
     price: string;
     days: string;
+    hours: string;
 }
 
 interface OfferCardProps {
@@ -88,26 +89,37 @@ const OfferCard = ({
                     rows={2}
                     placeholder="Descripción"
                 />
-                <div className="flex gap-2 mb-2">
-                    <div className="flex-1 relative">
-                        <span className="absolute left-3 top-2.5 font-bold text-gray-500 text-xs">Q</span>
+                <div className="grid grid-cols-3 gap-2 mb-2">
+                    <div className="relative">
+                        <span className="absolute left-2 top-2.5 font-bold text-gray-500 text-xs">Q</span>
                         <input
                             type="number"
                             value={editFields.price}
                             onChange={e => onEditFieldChange('price', e.target.value)}
                             placeholder="Monto"
-                            className="w-full text-xs p-2 pl-7 border border-gray-200 focus:border-yellow-400 outline-none rounded"
+                            className="w-full text-xs p-2 pl-6 border border-gray-200 focus:border-yellow-400 outline-none rounded"
                             min={0}
                         />
                     </div>
-                    <div className="flex-1 relative">
-                        <Clock size={12} className="absolute left-2 top-2.5 text-gray-400" />
+                    <div className="relative">
+                        <Clock size={12} className="absolute left-1.5 top-2.5 text-gray-400" />
                         <input
                             type="number"
                             value={editFields.days}
                             onChange={e => onEditFieldChange('days', e.target.value)}
                             placeholder="Días"
-                            className="w-full text-xs p-2 pl-6 border border-gray-200 focus:border-yellow-400 outline-none rounded"
+                            className="w-full text-xs p-2 pl-5 border border-gray-200 focus:border-yellow-400 outline-none rounded"
+                            min={1}
+                        />
+                    </div>
+                    <div className="relative">
+                        <Clock size={12} className="absolute left-1.5 top-2.5 text-gray-400" />
+                        <input
+                            type="number"
+                            value={editFields.hours}
+                            onChange={e => onEditFieldChange('hours', e.target.value)}
+                            placeholder="Horas"
+                            className="w-full text-xs p-2 pl-5 border border-gray-200 focus:border-yellow-400 outline-none rounded"
                             min={1}
                         />
                     </div>
@@ -147,15 +159,16 @@ const OfferCard = ({
             {/* Description */}
             <p className="text-xs text-gray-600 line-clamp-3 mb-2">{offer.description}</p>
 
-            {/* Price + days */}
-            <div className="flex items-center gap-3 text-xs text-gray-500 bg-gray-50 rounded-md p-1.5 mb-1 text-center justify-center">
+            {/* Price + days/hours */}
+            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 bg-gray-50 rounded-md p-1.5 mb-1 text-center justify-center">
                 <span className="flex items-center font-bold text-green-700 bg-white px-2 py-0.5 rounded shadow-sm">
                     Q{offer.price}
                 </span>
-                {offer.estimatedDays && (
+                {(offer.estimatedDays || offer.estimatedHours) && (
                     <span className="flex items-center bg-white px-2 py-0.5 rounded shadow-sm">
                         <Clock size={12} className="mr-0.5" />
-                        {offer.estimatedDays} días
+                        {offer.estimatedDays ? `${offer.estimatedDays} d${offer.estimatedHours ? ' ' : ''}` : ''}
+                        {offer.estimatedHours ? `${offer.estimatedHours} h` : ''}
                     </span>
                 )}
             </div>

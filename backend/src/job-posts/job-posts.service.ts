@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, JobStatus, OfferStatus, Role } from '@prisma/client';
 
@@ -204,31 +204,27 @@ export class JobPostsService {
 
     async updateStatus(id: string, status: string, userId: string) {
         const post = await this.prisma.jobPost.findUnique({ where: { id } });
-        if (!post) throw new Error('Job post not found');
+        if (!post) throw new BadRequestException('Job post not found');
 
         const updated = await this.prisma.jobPost.update({
             where: { id },
             data: { status: status as JobStatus }
         });
 
-        // If job is completed (CLOSED), increment the author's jobsCompleted
-        if (status === 'CLOSED') {
-            await this.prisma.profile.updateMany({
-                where: { userId: post.authorId },
-                data: { jobsCompleted: { increment: 1 } }
-            });
-        }
+        // If the client closes the job post, we don't increment their jobsCompleted,
+        // because jobsCompleted is meant for the PROVIDER who did the work.
+        // Providers get their stats incremented when the JobOffer is marked as COMPLETED in the chat.
 
         return updated;
     }
 
     async addReview(jobPostId: string, reviewerId: string, data: { rating: number, content: string }) {
         const post = await this.prisma.jobPost.findUnique({ where: { id: jobPostId } });
-        if (!post) throw new Error('Job post not found');
+        if (!post) throw new BadRequestException('Job post not found');
 
         // Find the profile of the job post author (the person being reviewed)
         const profile = await this.prisma.profile.findUnique({ where: { userId: post.authorId } });
-        if (!profile) throw new Error('Profile not found');
+        if (!profile) throw new BadRequestException('Profile not found');
 
         // Create the review
         const review = await this.prisma.review.create({
@@ -255,9 +251,9 @@ export class JobPostsService {
         return review;
     }
 
-    async createOffer(jobPostId: string, senderId: string, data: { description: string, price: number, estimatedDays?: number }) {
+    async createOffer(jobPostId: string, senderId: string, data: { description: string, price: number, estimatedDays?: number, estimatedHours?: number }) {
         const post = await this.prisma.jobPost.findUnique({ where: { id: jobPostId } });
-        if (!post) throw new Error('Job post not found');
+        if (!post) throw new BadRequestException('Job post not found');
 
         const offer = await this.prisma.jobOffer.create({
             data: {
@@ -267,6 +263,7 @@ export class JobPostsService {
                 description: data.description,
                 price: data.price,
                 estimatedDays: data.estimatedDays || null,
+                estimatedHours: data.estimatedHours || null,
             },
             include: {
                 sender: { select: { id: true, name: true, profile: { select: { photoUrl: true } } } },
@@ -276,8 +273,11 @@ export class JobPostsService {
         });
 
         // Auto-send message to the chat
-        const daysText = data.estimatedDays ? ` · ${data.estimatedDays} d\u00edas` : '';
-        const chatContent = `[Propuesta] "${post.title}"\nDetalles: ${data.description}\nMonto: Q${data.price}${daysText}`;
+        const daysText = data.estimatedDays ? ` ${data.estimatedDays} d\u00edas` : '';
+        const hoursText = data.estimatedHours ? ` ${data.estimatedHours} horas` : '';
+        const timeText = (daysText || hoursText) ? ` ·${daysText}${hoursText}` : '';
+        
+        const chatContent = `[Propuesta] "${post.title}"\nDetalles: ${data.description}\nMonto: Q${data.price}${timeText}`;
         const { user1Id, user2Id } = senderId < post.authorId
             ? { user1Id: senderId, user2Id: post.authorId }
             : { user1Id: post.authorId, user2Id: senderId };
@@ -309,7 +309,7 @@ export class JobPostsService {
 
     async respondToOffer(offerId: string, userId: string, status: string) {
         const offer = await this.prisma.jobOffer.findUnique({ where: { id: offerId } });
-        if (!offer) throw new Error('Offer not found');
+        if (!offer) throw new BadRequestException('Offer not found');
 
         const updated = await this.prisma.jobOffer.update({
             where: { id: offerId },
@@ -350,21 +350,23 @@ export class JobPostsService {
         });
     }
 
-    async editOffer(offerId: string, userId: string, data: { description?: string, price?: number, estimatedDays?: number }) {
+    async editOffer(offerId: string, userId: string, data: { description?: string, price?: number, estimatedDays?: number, estimatedHours?: number }) {
         const offer = await this.prisma.jobOffer.findUnique({
             where: { id: offerId },
             include: { jobPost: { select: { title: true } } }
         });
-        if (!offer) throw new Error('Offer not found');
+        if (!offer) throw new BadRequestException('Offer not found');
         // Both sender and receiver can counter-propose
-        if (offer.senderId !== userId && offer.receiverId !== userId) throw new Error('You are not part of this offer');
+        if (offer.senderId !== userId && offer.receiverId !== userId) throw new BadRequestException('You are not part of this offer');
 
         const oldPrice = offer.price;
         const oldDays = offer.estimatedDays;
+        const oldHours = offer.estimatedHours;
         const oldDesc = offer.description;
 
         const newPrice = data.price !== undefined ? data.price : oldPrice;
         const newDays = data.estimatedDays !== undefined ? data.estimatedDays : oldDays;
+        const newHours = data.estimatedHours !== undefined ? data.estimatedHours : oldHours;
         const newDesc = data.description !== undefined ? data.description : oldDesc;
 
         const updated = await this.prisma.jobOffer.update({
@@ -373,6 +375,7 @@ export class JobPostsService {
                 description: newDesc,
                 price: newPrice,
                 estimatedDays: newDays,
+                estimatedHours: newHours,
                 status: 'PENDING',
                 senderApproved: false,
                 receiverApproved: false
@@ -386,9 +389,15 @@ export class JobPostsService {
 
         // Auto-send diff message to chat
         const peerId = offer.senderId === userId ? offer.receiverId : offer.senderId;
-        const oldDaysText = oldDays ? ` · ${oldDays} d\u00edas` : '';
-        const newDaysText = newDays ? ` · ${newDays} d\u00edas` : '';
-        const chatContent = `[Contra-propuesta] "${offer.jobPost.title}"\nAnterior: Q${oldPrice}${oldDaysText}\nNueva: Q${newPrice}${newDaysText}\nDetalles: ${newDesc}`;
+        const oldDaysText = oldDays ? ` ${oldDays} d\u00edas` : '';
+        const oldHoursText = oldHours ? ` ${oldHours} horas` : '';
+        const oldTimeText = (oldDaysText || oldHoursText) ? ` ·${oldDaysText}${oldHoursText}` : '';
+
+        const newDaysText = newDays ? ` ${newDays} d\u00edas` : '';
+        const newHoursText = newHours ? ` ${newHours} horas` : '';
+        const newTimeText = (newDaysText || newHoursText) ? ` ·${newDaysText}${newHoursText}` : '';
+
+        const chatContent = `[Contra-propuesta] "${offer.jobPost.title}"\nAnterior: Q${oldPrice}${oldTimeText}\nNueva: Q${newPrice}${newTimeText}\nDetalles: ${newDesc}`;
         const { user1Id, user2Id } = userId < peerId
             ? { user1Id: userId, user2Id: peerId }
             : { user1Id: peerId, user2Id: userId };
@@ -401,13 +410,13 @@ export class JobPostsService {
 
     async approveOffer(offerId: string, userId: string) {
         const offer = await this.prisma.jobOffer.findUnique({ where: { id: offerId } });
-        if (!offer) throw new Error('Offer not found');
-        if (offer.status !== 'PENDING') throw new Error('Offer is not pending');
+        if (!offer) throw new BadRequestException('Offer not found');
+        if (offer.status !== 'PENDING') throw new BadRequestException('Offer is not pending');
 
         const isSender = offer.senderId === userId;
         const isReceiver = offer.receiverId === userId;
 
-        if (!isSender && !isReceiver) throw new Error('You are not part of this offer');
+        if (!isSender && !isReceiver) throw new BadRequestException('You are not part of this offer');
 
         const updateData: Prisma.JobOfferUpdateInput = {};
         if (isSender) updateData.senderApproved = true;
@@ -448,12 +457,12 @@ export class JobPostsService {
                 receiver: { select: { id: true, name: true, role: true } },
             }
         });
-        if (!offer) throw new Error('Offer not found');
-        if (offer.status !== 'ACCEPTED') throw new Error('Offer must be ACCEPTED to be completed');
+        if (!offer) throw new BadRequestException('Offer not found');
+        if (offer.status !== 'ACCEPTED') throw new BadRequestException('Offer must be ACCEPTED to be completed');
 
         const isSender = offer.senderId === userId;
         const isReceiver = offer.receiverId === userId;
-        if (!isSender && !isReceiver) throw new Error('You are not part of this offer');
+        if (!isSender && !isReceiver) throw new BadRequestException('You are not part of this offer');
 
         const updateData: Prisma.JobOfferUpdateInput = {};
         if (isSender) updateData.senderCompleted = true;
@@ -486,11 +495,13 @@ export class JobPostsService {
                     : null;
 
             if (providerUser) {
-                const hoursToAdd = offer.estimatedDays ?? 1;
+                const daysToAdd = offer.estimatedDays ?? 0;
+                const hoursToAdd = offer.estimatedHours ?? 0;
                 await this.prisma.profile.updateMany({
                     where: { userId: providerUser.id },
                     data: {
                         jobsCompleted: { increment: 1 },
+                        days: { increment: daysToAdd },
                         hours: { increment: hoursToAdd }
                     }
                 });
@@ -502,12 +513,12 @@ export class JobPostsService {
 
     async submitOfferReview(offerId: string, reviewerId: string, data: { rating: number; content?: string }) {
         const offer = await this.prisma.jobOffer.findUnique({ where: { id: offerId } });
-        if (!offer) throw new Error('Offer not found');
-        if (offer.status !== 'COMPLETED') throw new Error('Offer must be COMPLETED to leave a review');
+        if (!offer) throw new BadRequestException('Offer not found');
+        if (offer.status !== 'COMPLETED') throw new BadRequestException('Offer must be COMPLETED to leave a review');
 
         const isSender = offer.senderId === reviewerId;
         const isReceiver = offer.receiverId === reviewerId;
-        if (!isSender && !isReceiver) throw new Error('You are not part of this offer');
+        if (!isSender && !isReceiver) throw new BadRequestException('You are not part of this offer');
 
         // The reviewer rates the OTHER person
         const recipientUserId = isSender ? offer.receiverId : offer.senderId;
@@ -522,7 +533,7 @@ export class JobPostsService {
         const existing = await this.prisma.review.findFirst({
             where: { offerId, authorId: reviewerId }
         });
-        if (existing) throw new Error('You have already reviewed this job');
+        if (existing) throw new BadRequestException('You have already reviewed this job');
 
         const review = await this.prisma.review.create({
             data: {

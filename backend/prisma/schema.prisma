@@ -47,6 +47,7 @@ model Profile {
   lng                 Float?
   rating              Float                @default(0)
   jobsCompleted       Int                  @default(0)
+  days                Int                  @default(0)
   hours               Int                  @default(0)
   canTravel           Boolean              @default(false)
   hasVehicle          Boolean              @default(false)
@@ -109,6 +110,7 @@ model JobOffer {
   description      String
   price            Float
   estimatedDays    Int?
+  estimatedHours   Int?
   status            OfferStatus @default(PENDING)
   senderApproved    Boolean     @default(false)
   receiverApproved  Boolean     @default(false)

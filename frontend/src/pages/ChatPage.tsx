@@ -40,7 +40,7 @@ const ChatPage = () => {
 
     // Edit offer state
     const [editingOfferId, setEditingOfferId] = useState<string | null>(null);
-    const [editFields, setEditFields] = useState<EditFields>({ desc: '', price: '', days: '' });
+    const [editFields, setEditFields] = useState<EditFields>({ desc: '', price: '', days: '', hours: '' });
     const [offerUpdateTrigger, setOfferUpdateTrigger] = useState(0);
 
     // Rating modal state
@@ -230,9 +230,15 @@ const ChatPage = () => {
         setEditingOfferId(offer.id);
         setEditFields({
             desc: offer.description,
-            price: offer.price.toString(),
-            days: offer.estimatedDays ? offer.estimatedDays.toString() : '',
+            price: String(offer.price),
+            days: offer.estimatedDays ? String(offer.estimatedDays) : '',
+            hours: offer.estimatedHours ? String(offer.estimatedHours) : '',
         });
+    };
+
+    const handleCancelEdit = () => {
+        setEditingOfferId(null);
+        setEditFields({ desc: '', price: '', days: '', hours: '' });
     };
 
     const handleEditFieldChange = (field: keyof EditFields, value: string) => {
@@ -246,13 +252,14 @@ const ChatPage = () => {
                 description: editFields.desc,
                 price: parseFloat(editFields.price),
                 estimatedDays: editFields.days ? parseInt(editFields.days) : null,
+                estimatedHours: editFields.hours ? parseInt(editFields.hours) : null,
             });
             setOffers(prev => prev.map(o => o.id === editingOfferId ? res.data : o));
             setEditingOfferId(null);
             emitOfferUpdated();
         } catch (error) {
             console.error('Error editing offer:', error);
-            alert('Error al editar la propuesta');
+            alert('No se pudo editar la propuesta.');
         }
     };
 
@@ -379,7 +386,7 @@ const ChatPage = () => {
                             onRespond={handleOfferRespond}
                             onComplete={handleOfferComplete}
                             onStartEdit={handleStartEdit}
-                            onCancelEdit={() => setEditingOfferId(null)}
+                            onCancelEdit={handleCancelEdit}
                             onEditFieldChange={handleEditFieldChange}
                             onEditSubmit={handleOfferEditSubmit}
                             onRemoveJobPost={handleRemoveJobPost}
@@ -445,7 +452,7 @@ const ChatPage = () => {
                 onRespond={handleOfferRespond}
                 onComplete={handleOfferComplete}
                 onStartEdit={handleStartEdit}
-                onCancelEdit={() => setEditingOfferId(null)}
+                onCancelEdit={handleCancelEdit}
                 onEditFieldChange={handleEditFieldChange}
                 onEditSubmit={handleOfferEditSubmit}
                 onRemoveJobPost={handleRemoveJobPost}

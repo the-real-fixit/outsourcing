@@ -57,6 +57,7 @@ const JobPostDetail = () => {
     const [offerDescription, setOfferDescription] = useState('');
     const [offerPrice, setOfferPrice] = useState('');
     const [offerDays, setOfferDays] = useState('');
+    const [offerHours, setOfferHours] = useState('');
     const [submittingOffer, setSubmittingOffer] = useState(false);
     const [offerSent, setOfferSent] = useState(false);
 
@@ -106,7 +107,8 @@ const JobPostDetail = () => {
             await api.post(`/job-posts/${id}/offer`, {
                 description: offerDescription,
                 price: parseFloat(offerPrice),
-                estimatedDays: offerDays ? parseInt(offerDays) : null
+                estimatedDays: offerDays ? parseInt(offerDays) : null,
+                estimatedHours: offerHours ? parseInt(offerHours) : null
             });
             setOfferSent(true);
             setShowOfferForm(false);
@@ -346,7 +348,7 @@ const JobPostDetail = () => {
                                 />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-1">
                                         <Banknote size={14} className="inline mr-1" />
@@ -370,6 +372,20 @@ const JobPostDetail = () => {
                                         type="number"
                                         value={offerDays}
                                         onChange={(e) => setOfferDays(e.target.value)}
+                                        className="block w-full px-4 py-2.5 rounded-md border border-gray-300 text-sm focus:ring-yellow-500 focus:border-yellow-500 outline-none"
+                                        placeholder="Opcional"
+                                        min={1}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">
+                                        <Clock size={14} className="inline mr-1" />
+                                        Horas
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={offerHours}
+                                        onChange={(e) => setOfferHours(e.target.value)}
                                         className="block w-full px-4 py-2.5 rounded-md border border-gray-300 text-sm focus:ring-yellow-500 focus:border-yellow-500 outline-none"
                                         placeholder="Opcional"
                                         min={1}

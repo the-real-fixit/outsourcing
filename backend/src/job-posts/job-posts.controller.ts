@@ -81,13 +81,13 @@ export class JobPostsController {
 
     @UseGuards(AuthGuard('jwt'))
     @Post(':id/offer')
-    async createOffer(@Request() req, @Param('id') id: string, @Body() data: { description: string, price: number, estimatedDays?: number }) {
+    async createOffer(@Request() req, @Param('id') id: string, @Body() data: { description: string, price: number, estimatedDays?: number, estimatedHours?: number }) {
         return this.jobPostsService.createOffer(id, req.user.userId, data);
     }
 
     @UseGuards(AuthGuard('jwt'))
     @Patch('offers/:offerId/edit')
-    async editOffer(@Request() req, @Param('offerId') offerId: string, @Body() data: { description?: string, price?: number, estimatedDays?: number }) {
+    async editOffer(@Request() req, @Param('offerId') offerId: string, @Body() data: { description?: string, price?: number, estimatedDays?: number, estimatedHours?: number }) {
         return this.jobPostsService.editOffer(offerId, req.user.userId, data);
     }
 

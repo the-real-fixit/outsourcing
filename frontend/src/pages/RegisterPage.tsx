@@ -48,6 +48,7 @@ const RegisterPage = () => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState('');
     const { register } = useAuth();
 
@@ -125,7 +126,7 @@ const RegisterPage = () => {
     };
 
     const canAdvance = () => {
-        if (step === 1) return email.trim() !== '' && passwordStrength.score >= 2;
+        if (step === 1) return email.trim() !== '' && passwordStrength.score >= 2 && password === confirmPassword;
         if (step === 2) return role !== '' && name.trim() !== '';
         return true;
     };
@@ -245,6 +246,28 @@ const RegisterPage = () => {
                                     </div>
                                 )}
                             </div>
+                            
+                            <div>
+                                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">Confirmar contraseña</label>
+                                <div className="mt-1 relative rounded-md shadow-sm">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <Lock className="h-5 w-5 text-gray-400" />
+                                    </div>
+                                    <input
+                                        id="confirmPassword"
+                                        type={showPassword ? 'text' : 'password'}
+                                        autoComplete="new-password"
+                                        required
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                        className={`focus:ring-yellow-500 focus:border-yellow-500 block w-full pl-10 pr-10 sm:text-sm border-gray-300 rounded-md py-2.5 px-3 border ${confirmPassword.length > 0 && password !== confirmPassword ? 'border-red-300' : ''}`}
+                                        placeholder="Repite la contraseña"
+                                    />
+                                </div>
+                                {confirmPassword.length > 0 && password !== confirmPassword && (
+                                    <p className="mt-1 text-xs text-red-500">Las contraseñas no coinciden.</p>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -350,9 +373,9 @@ const RegisterPage = () => {
                                         );
                                     })}
                                 </div>
-                                {categoryIds.length === 0 && (
-                                    <p className="mt-1 text-xs text-gray-400">Puedes seleccionar varias especialidades.</p>
-                                )}
+                                <p className="mt-2 text-xs text-gray-500 font-medium">
+                                    Puedes seleccionar varias especialidades ahora y modificarlas más adelante en tu perfil.
+                                </p>
                             </div>
 
                             <div className="space-y-3">
