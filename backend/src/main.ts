@@ -10,10 +10,15 @@ async function bootstrap() {
   // Security Headers
   app.use(helmet());
 
-  // Redis Adapter for WebSockets
-  const redisIoAdapter = new RedisIoAdapter(app);
-  await redisIoAdapter.connectToRedis();
-  app.useWebSocketAdapter(redisIoAdapter);
+  // Redis Adapter for WebSockets (only if REDIS_URL is provided)
+  if (process.env.REDIS_URL) {
+    const redisIoAdapter = new RedisIoAdapter(app);
+    await redisIoAdapter.connectToRedis();
+    app.useWebSocketAdapter(redisIoAdapter);
+    console.log('Redis WebSockets Adapter enabled');
+  } else {
+    console.log('REDIS_URL not found, falling back to default in-memory WebSockets adapter');
+  }
 
   // Flexible CORS
   app.enableCors({
