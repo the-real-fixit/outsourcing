@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { CacheModule } from '@nestjs/cache-manager';
+import { redisStore } from 'cache-manager-redis-yet';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -20,9 +22,24 @@ import { APP_GUARD } from '@nestjs/core';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    CacheModule.registerAsync({
+      isGlobal: true,
+      useFactory: async () => {
+        if (process.env.REDIS_URL) {
+          const store = await redisStore({
+            url: process.env.REDIS_URL,
+            ttl: 300000,
+          });
+          return { store };
+        }
+        return {
+          ttl: 300000,
+        };
+      },
+    }),
     ThrottlerModule.forRoot([{
       ttl: 60000,
-      limit: 85, // max 85 requests per minute per IP
+      limit: process.env.NODE_ENV === 'stress' ? 0 : 85, // Disabled during stress tests
     }]),
     PrismaModule,
     UsersModule,
@@ -40,10 +57,10 @@ import { APP_GUARD } from '@nestjs/core';
   controllers: [AppController],
   providers: [
     AppService,
-    {
+    ...(process.env.NODE_ENV === 'stress' ? [] : [{
       provide: APP_GUARD,
-      useClass: ThrottlerGuard
-    }
+      useClass: ThrottlerGuard,
+    }]),
   ],
 })
 export class AppModule { }

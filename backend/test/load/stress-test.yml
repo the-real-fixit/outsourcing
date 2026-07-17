@@ -1,0 +1,420 @@
+################################################################################
+#  FIX IT — STRESS TEST DESTRUCTIVO
+#  Cobertura: 31 endpoints HTTP + 6 escenarios ponderados
+#  Objetivo: Encontrar el punto de quiebre absoluto del sistema
+################################################################################
+
+config:
+  target: "http://localhost:3000"
+  processor: "./helpers.js"
+
+  phases:
+    # Fase 1: Calentamiento — establecer baseline
+    - name: "🔥 Warm-up"
+      duration: 30
+      arrivalRate: 5
+
+    # Fase 2: Rampa ascendente — presionar progresivamente  
+    - name: "📈 Ramp-up"
+      duration: 60
+      arrivalRate: 5
+      rampTo: 30
+
+    # Fase 3: Carga sostenida alta — medir estabilidad
+    - name: "⚡ Sustained Load"
+      duration: 120
+      arrivalRate: 50
+
+    # Fase 4: Spike extremo — buscar el punto de quiebre
+    - name: "💥 Spike (Breaking Point)"
+      duration: 30
+      arrivalRate: 100
+
+    # Fase 5: Enfriamiento — medir recuperación
+    - name: "❄️ Cool-down"
+      duration: 30
+      arrivalRate: 10
+
+  # Timeouts agresivos para detectar cuellos de botella
+  http:
+    timeout: 10      # 10s max por request
+    pool: 256         # Conexiones HTTP concurrentes
+
+  # Plugins para métricas avanzadas
+  plugins:
+    metrics-by-endpoint:
+      useOnlyRequestNames: true
+    ensure:
+      thresholds:
+        - http.response_time.p99: 5000    # p99 < 5s
+        - http.request_rate: 10            # Al menos 10 RPS
+
+  # Reportes
+  reporting:
+    - json:
+        filePath: "./test/load/results.json"
+
+################################################################################
+#  ESCENARIOS
+################################################################################
+
+scenarios:
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # ESCENARIO 1: Read-Heavy Public (35% del tráfico)
+  # Simula usuarios anónimos navegando la plataforma
+  # ════════════════════════════════════════════════════════════════════════════
+  - name: "📖 Read-Heavy Public"
+    weight: 35
+    beforeScenario: "setVariables"
+    flow:
+      # Health check
+      - get:
+          url: "/"
+          name: "GET /"
+
+      # Categories (catálogo completo)
+      - get:
+          url: "/categories"
+          name: "GET /categories"
+      - think: 1
+
+      # Ads highlighted
+      - get:
+          url: "/ads/highlighted"
+          name: "GET /ads/highlighted"
+      - think: 1
+
+      # Job posts — sin filtros (worst case: full scan)
+      - get:
+          url: "/job-posts?page=1&limit=20"
+          name: "GET /job-posts (paginated)"
+      - think: 1
+
+      # Job posts — con búsqueda text (ILIKE)
+      - get:
+          url: "/job-posts?search=electricista&status=OPEN"
+          name: "GET /job-posts (search+filter)"
+      - think: 1
+
+      # Job posts — con geo-sort (Haversine — CPU-intensive)
+      - get:
+          url: "/job-posts?lat={{ randomLat }}&lng={{ randomLng }}&limit=10"
+          name: "GET /job-posts (geo-sort)"
+      - think: 1
+
+      # Job posts — por categoría y página
+      - get:
+          url: "/job-posts?categoryId={{ randomCategoryId }}&page={{ randomPage }}&limit={{ randomLimit }}"
+          name: "GET /job-posts (category+page)"
+      - think: 1
+
+      # Job post detail (individual)
+      - get:
+          url: "/job-posts/{{ randomJobPostId }}"
+          name: "GET /job-posts/:id"
+      - think: 1
+
+      # Providers list (paginado)
+      - get:
+          url: "/users/providers?page=1&limit=20"
+          name: "GET /users/providers"
+      - think: 1
+
+      # Public profile
+      - get:
+          url: "/users/public/{{ randomUserId }}"
+          name: "GET /users/public/:id"
+      - think: 1
+
+      # Public reviews (paginado)
+      - get:
+          url: "/users/public/{{ randomUserId }}/reviews?page=1&limit=5"
+          name: "GET /users/public/:id/reviews"
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # ESCENARIO 2: Auth Flood (15% del tráfico)
+  # Simula oleadas masivas de login + registros concurrentes
+  # Riesgo: bcrypt bloquea el event loop
+  # ════════════════════════════════════════════════════════════════════════════
+  - name: "🔐 Auth Flood"
+    weight: 15
+    beforeScenario: "setVariables"
+    flow:
+      # Login con usuario existente
+      - post:
+          url: "/auth/login"
+          name: "POST /auth/login"
+          json:
+            email: "{{ userEmail }}"
+            password: "{{ userPassword }}"
+          afterResponse: "captureToken"
+      - think: 1
+
+      # Register nuevo usuario (unique email via uuid)
+      - post:
+          url: "/auth/register"
+          name: "POST /auth/register"
+          json:
+            email: "stress_new_{{ uuid }}@test.com"
+            password: "StressTest123!"
+            name: "New Stress User {{ uuid }}"
+            role: "CLIENT"
+      - think: 1
+
+      # Login de vuelta para validar consistencia
+      - post:
+          url: "/auth/login"
+          name: "POST /auth/login (re-login)"
+          json:
+            email: "{{ userEmail }}"
+            password: "{{ userPassword }}"
+          afterResponse: "captureToken"
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # ESCENARIO 3: Write Transactional (20% del tráfico)
+  # Simula creación de contenido autenticado
+  # Riesgo: escrituras concurrentes, constraint violations
+  # ════════════════════════════════════════════════════════════════════════════
+  - name: "✍️ Write Transactional"
+    weight: 20
+    beforeScenario: "setVariables"
+    flow:
+      # Login
+      - post:
+          url: "/auth/login"
+          name: "POST /auth/login (write-flow)"
+          json:
+            email: "{{ userEmail }}"
+            password: "{{ userPassword }}"
+          afterResponse: "captureToken"
+      - think: 1
+
+      # Create job post
+      - post:
+          url: "/job-posts"
+          name: "POST /job-posts"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          json:
+            title: "Stress Job {{ uuid }}"
+            description: "Descripción de prueba de estrés generada automáticamente para evaluar el rendimiento de escritura del sistema bajo carga concurrente masiva. Este es un texto largo para estresar serialización."
+            budget: "750"
+            location: "Zona {{ randomPage }}, Guatemala"
+            department: "Guatemala"
+            municipality: "Mixco"
+            categoryId: "{{ randomCategoryId }}"
+            photos: []
+      - think: 2
+
+      # Create offer on existing post
+      - post:
+          url: "/job-posts/{{ randomJobPostId }}/offer"
+          name: "POST /job-posts/:id/offer"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          json:
+            description: "Propuesta de estrés: puedo resolver esto rápido."
+            price: 500
+            estimatedDays: 3
+            estimatedHours: 8
+      - think: 1
+
+      # Get upload signature (Cloudinary)
+      - get:
+          url: "/upload/signature"
+          name: "GET /upload/signature"
+          headers:
+            Authorization: "Bearer {{ token }}"
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # ESCENARIO 4: Chat Intensive (10% del tráfico)
+  # Simula uso intensivo del sistema de chat
+  # Riesgo: paginación con cursor, muchas queries relacionales
+  # ════════════════════════════════════════════════════════════════════════════
+  - name: "💬 Chat Intensive"
+    weight: 10
+    beforeScenario: "setVariables"
+    flow:
+      # Login
+      - post:
+          url: "/auth/login"
+          name: "POST /auth/login (chat-flow)"
+          json:
+            email: "{{ userEmail }}"
+            password: "{{ userPassword }}"
+          afterResponse: "captureToken"
+      - think: 1
+
+      # Get all chats
+      - get:
+          url: "/chats"
+          name: "GET /chats"
+          headers:
+            Authorization: "Bearer {{ token }}"
+      - think: 1
+
+      # Get chat history with pagination
+      - get:
+          url: "/chats/{{ randomPeerId }}?limit=50"
+          name: "GET /chats/:peerId (history)"
+          headers:
+            Authorization: "Bearer {{ token }}"
+      - think: 1
+
+      # Send message
+      - post:
+          url: "/chats/{{ randomPeerId }}/messages"
+          name: "POST /chats/:peerId/messages"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          json:
+            content: "Mensaje de estrés {{ uuid }}"
+      - think: 1
+
+      # Mark as read
+      - patch:
+          url: "/chats/{{ randomPeerId }}/read"
+          name: "PATCH /chats/:peerId/read"
+          headers:
+            Authorization: "Bearer {{ token }}"
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # ESCENARIO 5: Offer Lifecycle (15% del tráfico)
+  # Flujo transaccional completo de una oferta
+  # Riesgo: múltiples writes secuenciales, state transitions
+  # ════════════════════════════════════════════════════════════════════════════
+  - name: "🤝 Offer Lifecycle"
+    weight: 15
+    beforeScenario: "setVariables"
+    flow:
+      # Login as provider
+      - post:
+          url: "/auth/login"
+          name: "POST /auth/login (provider)"
+          json:
+            email: "{{ providerEmail }}"
+            password: "{{ providerPassword }}"
+          afterResponse: "captureProviderToken"
+      - think: 1
+
+      # Get my offers
+      - get:
+          url: "/job-posts/offers/my"
+          name: "GET /job-posts/offers/my"
+          headers:
+            Authorization: "Bearer {{ providerToken }}"
+      - think: 1
+
+      # Get offers between users
+      - get:
+          url: "/job-posts/offers/between/{{ randomClientId }}"
+          name: "GET /job-posts/offers/between/:peerId"
+          headers:
+            Authorization: "Bearer {{ providerToken }}"
+      - think: 1
+
+      # Edit an existing offer (counter-propose)
+      - patch:
+          url: "/job-posts/offers/{{ randomOfferId }}/edit"
+          name: "PATCH /job-posts/offers/:offerId/edit"
+          headers:
+            Authorization: "Bearer {{ providerToken }}"
+          json:
+            price: 450
+            description: "Contra-propuesta de estrés"
+            estimatedDays: 5
+      - think: 1
+
+      # Approve the offer (as provider)
+      - patch:
+          url: "/job-posts/offers/{{ randomOfferId }}/approve"
+          name: "PATCH /job-posts/offers/:offerId/approve"
+          headers:
+            Authorization: "Bearer {{ providerToken }}"
+      - think: 1
+
+      # Login as client
+      - post:
+          url: "/auth/login"
+          name: "POST /auth/login (client)"
+          json:
+            email: "{{ clientEmail }}"
+            password: "{{ clientPassword }}"
+          afterResponse: "captureClientToken"
+      - think: 1
+
+      # Respond to offer (accept)
+      - patch:
+          url: "/job-posts/offers/{{ randomOfferId }}/respond"
+          name: "PATCH /job-posts/offers/:offerId/respond"
+          headers:
+            Authorization: "Bearer {{ clientToken }}"
+          json:
+            status: "ACCEPTED"
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # ESCENARIO 6: Profile Operations (5% del tráfico)
+  # Simula lectura y actualización de perfil y settings
+  # ════════════════════════════════════════════════════════════════════════════
+  - name: "👤 Profile Operations"
+    weight: 5
+    beforeScenario: "setVariables"
+    flow:
+      # Login
+      - post:
+          url: "/auth/login"
+          name: "POST /auth/login (profile-flow)"
+          json:
+            email: "{{ userEmail }}"
+            password: "{{ userPassword }}"
+          afterResponse: "captureToken"
+      - think: 1
+
+      # Get profile
+      - get:
+          url: "/users/profile"
+          name: "GET /users/profile"
+          headers:
+            Authorization: "Bearer {{ token }}"
+      - think: 1
+
+      # Update profile
+      - put:
+          url: "/users/profile"
+          name: "PUT /users/profile"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          json:
+            bio: "Perfil actualizado en stress test {{ uuid }}"
+            phone: "55559999"
+            canTravel: true
+            hasVehicle: false
+      - think: 1
+
+      # Get settings
+      - get:
+          url: "/users/settings"
+          name: "GET /users/settings"
+          headers:
+            Authorization: "Bearer {{ token }}"
+      - think: 1
+
+      # Update settings
+      - put:
+          url: "/users/settings"
+          name: "PUT /users/settings"
+          headers:
+            Authorization: "Bearer {{ token }}"
+          json:
+            darkMode: true
+            language: "en"
+            notificationsEnabled: false
+      - think: 1
+
+      # Get upload signature
+      - get:
+          url: "/upload/signature"
+          name: "GET /upload/signature"
+          headers:
+            Authorization: "Bearer {{ token }}"
