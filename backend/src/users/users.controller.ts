@@ -1,6 +1,6 @@
-import { Controller, Get, Put, Body, UseGuards, Request, Param, Query } from '@nestjs/common';
+import { Controller, Get, Put, Delete, Body, UseGuards, Request, Param, Query } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { UsersService, UpdateProfileDto, UpdateSettingsDto } from './users.service';
+import { UsersService, UpdateProfileDto, UpdateSettingsDto, ChangePasswordDto } from './users.service';
 
 @Controller('users')
 export class UsersController {
@@ -64,5 +64,17 @@ export class UsersController {
     @Put('settings')
     async updateSettings(@Request() req, @Body() data: UpdateSettingsDto) {
         return this.usersService.updateSettings(req.user.userId, data);
+    }
+
+    @UseGuards(AuthGuard('jwt'))
+    @Put('change-password')
+    async changePassword(@Request() req, @Body() data: ChangePasswordDto) {
+        return this.usersService.changePassword(req.user.userId, data);
+    }
+
+    @UseGuards(AuthGuard('jwt'))
+    @Delete('me')
+    async deleteAccount(@Request() req) {
+        return this.usersService.deleteAccount(req.user.userId);
     }
 }

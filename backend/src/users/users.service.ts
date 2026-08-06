@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { User, Prisma } from '@prisma/client';
-import { IsString, IsOptional, IsBoolean, IsArray } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsArray, MinLength } from 'class-validator';
+import * as bcrypt from 'bcrypt';
+import { UnauthorizedException } from '@nestjs/common';
 
 export class UpdateProfileDto {
     @IsOptional() @IsString() bio?: string;
@@ -24,6 +26,11 @@ export class UpdateSettingsDto {
     @IsOptional() @IsBoolean() emailNotifications?: boolean;
     @IsOptional() @IsBoolean() darkMode?: boolean;
     @IsOptional() @IsString() language?: string;
+}
+
+export class ChangePasswordDto {
+    @IsString() currentPassword!: string;
+    @IsString() @MinLength(6) newPassword!: string;
 }
 
 @Injectable()
@@ -208,5 +215,50 @@ export class UsersService {
             update: { notificationsEnabled, emailNotifications, darkMode, language },
             create: { userId, notificationsEnabled, emailNotifications, darkMode, language }
         });
+    }
+
+    async changePassword(userId: string, data: ChangePasswordDto) {
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (!user) throw new UnauthorizedException('Usuario no encontrado');
+
+        const isMatch = await bcrypt.compare(data.currentPassword, user.password);
+        if (!isMatch) throw new UnauthorizedException('La contraseña actual es incorrecta');
+
+        const hashedPassword = await bcrypt.hash(data.newPassword, 10);
+        await this.prisma.user.update({
+            where: { id: userId },
+            data: { password: hashedPassword }
+        });
+        return { success: true };
+    }
+
+    async deleteAccount(userId: string) {
+        // Soft delete / Anonymization
+        const anonymizedString = `deleted_${userId.substring(0, 8)}`;
+        await this.prisma.user.update({
+            where: { id: userId },
+            data: {
+                email: `${anonymizedString}@deleted.com`,
+                password: '',
+                name: 'Usuario Eliminado',
+            }
+        });
+        
+        try {
+            await this.prisma.profile.update({
+                where: { userId },
+                data: {
+                    bio: null,
+                    photoUrl: null,
+                    phone: null,
+                    address: null,
+                    travelDetails: null
+                }
+            });
+        } catch (e) {
+            // Ignorar si el usuario no tiene perfil creado aún
+        }
+
+        return { success: true };
     }
 }

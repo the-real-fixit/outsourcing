@@ -43,6 +43,13 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
             i18n.changeLanguage(settings.language);
         }
 
+        // Dark Mode
+        if (settings.darkMode) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+
         // Persist locally
         localStorage.setItem('app_settings', JSON.stringify(settings));
     }, [settings, i18n]);
